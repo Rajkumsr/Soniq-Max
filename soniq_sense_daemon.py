@@ -19,7 +19,14 @@ from audio_content import (
     YamnetAudioClassifier,
     downsample_48k_stereo_to_16k_mono,
 )
-from constants import APO_DEFAULT_PATH, DEFAULT_PROFILES
+from constants import (
+    APO_DEFAULT_PATH,
+    DEFAULT_PROFILES,
+    SENSE_BROWSER_PROCESSES as BROWSER_PROCESSES,
+    SENSE_LOCAL_MUSIC_PROCESSES,
+    SENSE_LOCAL_VIDEO_PROCESSES,
+    SENSE_VOICE_PROCESSES as VOICE_PROCESSES,
+)
 from export_system_apo import generate_apo_config, install_apo_config
 from windows_audio import classify_audio_stream_dynamically, get_process_name_by_pid
 
@@ -32,44 +39,7 @@ CAPTURE_ANALYSIS_FRAMES = ANALYSIS_FRAMES * (
 ANALYSIS_HOP_FRAMES = CAPTURE_ANALYSIS_FRAMES // 2
 DEFAULT_POLL_INTERVAL = 0.25
 DEFAULT_DEBOUNCE = 3
-BROWSER_PROCESSES = frozenset({
-    "chrome.exe",
-    "msedge.exe",
-    "firefox.exe",
-    "brave.exe",
-    "opera.exe",
-    "vivaldi.exe",
-})
-LOCAL_MEDIA_PROCESSES = frozenset({
-    "spotify.exe",
-    "musicbee.exe",
-    "foobar2000.exe",
-    "aimp.exe",
-    "winamp.exe",
-    "itunes.exe",
-    "applemusic.exe",
-    "tidal.exe",
-    "deezer.exe",
-    "wmplayer.exe",
-    "audacious.exe",
-    "cider.exe",
-    "amazonmusic.exe",
-    "soundcloud.exe",
-    "vlc.exe",
-    "mpc-hc.exe",
-    "mpc-be.exe",
-    "potplayermini64.exe",
-    "kmplayer.exe",
-})
-VOICE_PROCESSES = frozenset({
-    "zoom.exe",
-    "teams.exe",
-    "discord.exe",
-    "skype.exe",
-    "slack.exe",
-    "webex.exe",
-    "whatsapp.exe",
-})
+LOCAL_MEDIA_PROCESSES = SENSE_LOCAL_MUSIC_PROCESSES | SENSE_LOCAL_VIDEO_PROCESSES
 
 
 @dataclass(frozen=True)

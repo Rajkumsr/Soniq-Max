@@ -4,7 +4,7 @@ Renders a horizontally scrollable profile selector, selected-profile hero card,
 haptic-style slider feedback, custom dark tooltips, and bottom action bar.
 """
 import customtkinter as ctk
-from constants import THEME
+from constants import THEME, DEFAULT_PROFILES
 from ui.fluent_effects import FluentTooltip, attach_haptic_slider_feedback
 
 class AudioTab(ctk.CTkFrame):
@@ -313,6 +313,17 @@ class AudioTab(ctk.CTkFrame):
         )
         self.btn_save_custom.pack(side="right", padx=(0, 8))
 
+        self.btn_delete_custom = ctk.CTkButton(
+            self.action_bar,
+            text="🗑️ Delete Preset",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=THEME["pill_bg"],
+            text_color=THEME["clip_red"],
+            hover_color=THEME["btn_secondary_hover"],
+            height=32,
+            command=self.on_delete_custom_clicked
+        )
+
     def on_effect_card_toggled(self, card_name, switch_widget, card_frame):
         """Updates effect card border styling dynamically based on toggle state."""
         is_on = bool(switch_widget.get())
@@ -364,6 +375,11 @@ class AudioTab(ctk.CTkFrame):
         self.hero_title.configure(text=profile.get("title", "CUSTOM").upper())
         self.hero_badge.configure(text="SELECTED")
         self.hero_desc.configure(text=profile.get("desc", "Optimized sound profile."))
+
+        if key not in DEFAULT_PROFILES and hasattr(self, "btn_delete_custom"):
+            self.btn_delete_custom.pack(side="right", padx=(0, 8))
+        elif hasattr(self, "btn_delete_custom"):
+            self.btn_delete_custom.pack_forget()
 
         # Soft Accent Glow Pulse on the hero card
         self.active_hero_card.configure(
@@ -418,6 +434,15 @@ class AudioTab(ctk.CTkFrame):
 
         p = self.controller.profiles.get(active_key, {})
         self.update_active_hero_card(active_key, p)
+
+    def on_delete_custom_clicked(self):
+        active_key = self.controller.active_profile_key
+        if active_key in DEFAULT_PROFILES:
+            return
+        p = self.controller.profiles.get(active_key, {})
+        title = p.get("title", active_key)
+        self.controller.delete_custom_preset_from_disk(active_key)
+        self.controller.show_toast("Preset Deleted", f"'{title}' was removed", icon="🗑️")
 
     def animate_staggered_entrance(self):
         """Cascades effect cards smoothly upon view activation."""

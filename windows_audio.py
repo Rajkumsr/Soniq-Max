@@ -9,6 +9,16 @@ import time
 from ctypes import wintypes, c_float, c_uint32, POINTER
 import psutil
 
+from constants import (
+    GAMING_INDICATORS,
+    VOICE_INDICATORS,
+    MUSIC_INDICATORS,
+    VIDEO_INDICATORS,
+    SENSE_VOICE_PROCESSES,
+    SENSE_LOCAL_MUSIC_PROCESSES,
+    SENSE_LOCAL_VIDEO_PROCESSES,
+)
+
 logger = logging.getLogger(__name__)
 _last_session_error_log = 0.0
 
@@ -16,14 +26,6 @@ try:
     import comtypes
     from comtypes import COMObject, IUnknown, GUID, COMMETHOD, HRESULT
     from pycaw.pycaw import AudioUtilities, IAudioMeterInformation
-
-    class IAudioMeter(IUnknown):
-        _iid_ = GUID('{C02216F6-8C67-4B5B-9D00-D008E73E0064}')
-        _methods_ = [
-            COMMETHOD([], HRESULT, 'GetPeakValue', (['out'], POINTER(c_float), 'pfPeak')),
-            COMMETHOD([], HRESULT, 'GetMeteringChannelCount', (['out'], POINTER(c_uint32), 'pnChannelCount')),
-            COMMETHOD([], HRESULT, 'GetChannelsPeakValues', (['in'], c_uint32, 'u32ChannelCount'), (['in'], POINTER(c_float), 'afPeakValues'))
-        ]
 
     class PROPERTYKEY(ctypes.Structure):
         _fields_ = [('fmtid', GUID), ('pid', wintypes.DWORD)]
@@ -110,11 +112,14 @@ try:
                 self.enumerator = None
                 self.client_ptr = None
                 self.handler = None
+            try:
+                comtypes.CoUninitialize()
+            except Exception:
+                pass
 
     PYCAW_AVAILABLE = True
 except Exception:
     PYCAW_AVAILABLE = False
-    IAudioMeter = None
     class WindowsEndpointWatcher:
         def __init__(self, _on_change_callback): pass
         def start(self): pass
@@ -277,52 +282,19 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
             pass
 
     # 2. Dedicated Game Platform, Engine & Game Title Keywords
-    gaming_indicators = (
-        "steam", "epicgames", "riot", "valorant", "csgo", "cs2", "dota", "fortnite",
-        "cod", "warzone", "minecraft", "overwatch", "apex", "pubg", "cyberpunk",
-        "gta", "unreal", "unity", "directx", "vulkan", "battlefield", "rdr2", "forza",
-        "eldenring", "witcher", "destiny", "tarkov", "genshin", "honkai", "gameloop",
-        "roblox", "leagueoflegends", "ubisoft", "ea desktop", "origin", "battlenet",
-        "tomb raider", "assassin", "halo", "fifa", "nba2k", "rocketleague"
-    )
-    if any(k in title or k in proc_lower for k in gaming_indicators):
+    if any(k in title or k in proc_lower for k in GAMING_INDICATORS):
         return "fps_gaming", f"{short_name} (💥 Battlefield 360)"
 
     # 3. Dynamic Voice / Communication keywords (Higher priority than general playback)
-    voice_processes = (
-        "zoom.exe", "teams.exe", "discord.exe", "skype.exe", "slack.exe", 
-        "webex.exe", "whatsapp.exe"
-    )
-    voice_title_indicators = (
-        "zoom meeting", "zoom call", "teams meeting", "microsoft teams", "discord call",
-        "skype call", "slack huddle", "google meet", "webex meeting", "incoming call",
-        "in a call", "video call", "voice call", "conference call", "whatsapp call"
-    )
-    if proc_lower in voice_processes or any(k in title for k in voice_title_indicators):
+    if proc_lower in SENSE_VOICE_PROCESSES or any(k in title for k in VOICE_INDICATORS):
         return "voice_meeting", f"🎙️ {short_name}: Voice / Call"
 
     # 4. Dynamic Music / Audio keywords & Dedicated Music Players
-    music_processes = (
-        "spotify.exe", "musicbee.exe", "foobar2000.exe", "aimp.exe", "winamp.exe",
-        "itunes.exe", "applemusic.exe", "tidal.exe", "deezer.exe", "wmplayer.exe",
-        "audacious.exe", "cider.exe", "amazonmusic.exe", "soundcloud.exe"
-    )
-    music_indicators = (
-        "music", "song", "track", "album", "spotify", "sound", "audio", "radio", 
-        "podcast", "playlist", "official audio", "official video", "lyrics",
-        "youtube music", ".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", "soundcloud"
-    )
-    if proc_lower in music_processes or any(k in title or k in proc_lower for k in music_indicators):
+    if proc_lower in SENSE_LOCAL_MUSIC_PROCESSES or any(k in title or k in proc_lower for k in MUSIC_INDICATORS):
         return "bass_beast", f"🎵 {short_name}: Music Stream"
 
     # 5. Dynamic Video / Cinema keywords in active window
-    video_processes = ("vlc.exe", "mpc-hc.exe", "mpc-be.exe", "potplayermini64.exe", "kmplayer.exe")
-    video_indicators = (
-        "youtube", "netflix", "prime", "hotstar", "twitch", "vimeo", "movie", "film", 
-        "watch", "cinema", "trailer", "season", "episode", "1080p", "720p", "2160p", "4k", 
-        ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".webm"
-    )
-    if proc_lower in video_processes or any(k in title for k in video_indicators):
+    if proc_lower in SENSE_LOCAL_VIDEO_PROCESSES or any(k in title for k in VIDEO_INDICATORS):
         clean_title = title[:24] + "..." if len(title) > 24 else title
         return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
 

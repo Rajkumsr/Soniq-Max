@@ -4,6 +4,7 @@ SONIQ MAX PRO — Global Constants, Paths, Color Theme, and Default Presets.
 import os
 import sys
 import math
+import colorsys
 
 def get_base_dir():
     """Returns directory of executable or script."""
@@ -25,7 +26,6 @@ APO_DEFAULT_PATH = os.environ.get(
     r"C:\Program Files\EqualizerAPO\config\config.txt"
 )
 
-import colorsys
 try:
     import winreg
 except ImportError:
@@ -205,6 +205,51 @@ SENSE_LOCAL_MUSIC_PROCESSES = frozenset({
     "amazonmusic.exe",
     "soundcloud.exe",
 })
+
+SENSE_LOCAL_VIDEO_PROCESSES = frozenset({
+    "vlc.exe",
+    "mpc-hc.exe",
+    "mpc-be.exe",
+    "potplayermini64.exe",
+    "kmplayer.exe",
+})
+
+SENSE_VOICE_PROCESSES = frozenset({
+    "zoom.exe",
+    "teams.exe",
+    "discord.exe",
+    "skype.exe",
+    "slack.exe",
+    "webex.exe",
+    "whatsapp.exe",
+})
+
+GAMING_INDICATORS = (
+    "steam", "epicgames", "riot", "valorant", "csgo", "cs2", "dota", "fortnite",
+    "cod", "warzone", "minecraft", "overwatch", "apex", "pubg", "cyberpunk",
+    "gta", "unreal", "unity", "directx", "vulkan", "battlefield", "rdr2", "forza",
+    "eldenring", "witcher", "destiny", "tarkov", "genshin", "honkai", "gameloop",
+    "roblox", "leagueoflegends", "ubisoft", "ea desktop", "origin", "battlenet",
+    "tomb raider", "assassin", "halo", "fifa", "nba2k", "rocketleague"
+)
+
+VOICE_INDICATORS = (
+    "zoom meeting", "zoom call", "teams meeting", "microsoft teams", "discord call",
+    "skype call", "slack huddle", "google meet", "webex meeting", "incoming call",
+    "in a call", "video call", "voice call", "conference call", "whatsapp call"
+)
+
+MUSIC_INDICATORS = (
+    "music", "song", "track", "album", "spotify", "sound", "audio", "radio", 
+    "podcast", "playlist", "official audio", "official video", "lyrics",
+    "youtube music", ".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", "soundcloud"
+)
+
+VIDEO_INDICATORS = (
+    "youtube", "netflix", "prime", "hotstar", "twitch", "vimeo", "movie", "film", 
+    "watch", "cinema", "trailer", "season", "episode", "1080p", "720p", "2160p", "4k", 
+    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".webm"
+)
 
 
 def should_classify_browser_audio(session_process_names):

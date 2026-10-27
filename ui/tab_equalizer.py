@@ -30,14 +30,32 @@ class EqualizerTab(ctk.CTkFrame):
         self.eq_card = ctk.CTkFrame(self, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
         self.eq_card.pack(fill="both", expand=True, padx=8, pady=8)
 
-        # Keep the curve shortcuts accessible when the app is used in a narrow window.
+        # Top title row with quick Flat reset
+        top_row = ctk.CTkFrame(self.eq_card, fg_color="transparent")
+        top_row.pack(fill="x", padx=16, pady=(14, 4))
+
         eq_lbl = ctk.CTkLabel(
-            self.eq_card,
+            top_row,
             text="🎚️ 10-Band Graphic Equalizer Studio",
             font=ctk.CTkFont(family="Segoe UI", size=14, weight="bold"),
             text_color=THEME["accent_gold"],
         )
-        eq_lbl.pack(anchor="w", padx=16, pady=(14, 4))
+        eq_lbl.pack(side="left")
+
+        btn_reset_flat = ctk.CTkButton(
+            top_row,
+            text="↺ Reset to Flat (0 dB)",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            fg_color=THEME["pill_bg"],
+            text_color=THEME["text_dim"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["pill_border"],
+            height=26,
+            command=lambda: self.controller.apply_eq_preset("Flat")
+        )
+        btn_reset_flat.pack(side="right")
+        FluentTooltip(btn_reset_flat, title="Reset Equalizer", text="Resets all 10 frequency band gains to 0.0 dB (neutral response).")
 
         self.curves_bar = ctk.CTkScrollableFrame(
             self.eq_card,

@@ -27,6 +27,7 @@ SPEECH_LABEL_HINTS = (
 MUSIC_LABEL_HINTS = ("music", "singing", "choir", "musical instrument")
 LOOPBACK_SAMPLE_RATE = 48000
 YAMNET_DECIMATION = LOOPBACK_SAMPLE_RATE // SAMPLE_RATE
+LOOPBACK_ANALYSIS_FRAMES = ANALYSIS_FRAMES * YAMNET_DECIMATION
 
 
 @dataclass(frozen=True)
@@ -233,7 +234,8 @@ class AudioContentMonitor:
                 self._report_status(f"Analyzing playback locally: {speaker_name}")
                 self._reconnect_event.clear()
                 with loopback.recorder(
-                    samplerate=SAMPLE_RATE,
+                    samplerate=LOOPBACK_SAMPLE_RATE,
+                    channels=[0, 1],
                     blocksize=4096,
                 ) as recorder:
                     blocks_since_device_check = 0
@@ -242,10 +244,11 @@ class AudioContentMonitor:
                         and not self._shutdown_event.is_set()
                         and not self._reconnect_event.is_set()
                     ):
-                        samples = recorder.record(numframes=ANALYSIS_FRAMES)
+                        samples = recorder.record(numframes=LOOPBACK_ANALYSIS_FRAMES)
                         if not self._enabled_event.is_set() or self._shutdown_event.is_set():
                             break
-                        result = classifier.analyze(samples, SAMPLE_RATE)
+                        mono_16k = downsample_48k_stereo_to_16k_mono(samples)
+                        result = classifier.analyze(mono_16k, SAMPLE_RATE)
                         with self._lock:
                             self._latest_result = result
                         if self._on_result:

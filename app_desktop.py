@@ -321,6 +321,28 @@ class SoniqDesktopApp(ctk.CTk):
         if getattr(self, "tab_smart", None):
             self.tab_smart.refresh_profile_choices()
 
+    def delete_custom_preset_from_disk(self, key):
+        if key in DEFAULT_PROFILES:
+            raise ValueError("Built-in presets cannot be deleted.")
+        if key not in self.profiles:
+            return
+        del self.profiles[key]
+        custom_only = {
+            preset_key: preset
+            for preset_key, preset in self.profiles.items()
+            if preset_key not in DEFAULT_PROFILES
+        }
+        self._write_json_atomically(CUSTOM_PRESETS_FILE, custom_only)
+        if getattr(self, "tab_smart", None):
+            self.tab_smart.refresh_profile_choices()
+        self.select_profile("laptop_lifesaver", apply_system=True)
+        if getattr(self, "tab_audio", None):
+            self.tab_audio.render_profiles(self.profiles, self.active_profile_key)
+        self.lbl_status.configure(
+            text="✓ Custom preset deleted.",
+            text_color=THEME["accent_bronze"]
+        )
+
     # =========================================================================
     # Main UI Construction
     # =========================================================================
@@ -901,8 +923,6 @@ class SoniqDesktopApp(ctk.CTk):
             self.dev_dot.configure(text_color=THEME["accent_green"] if is_hp else THEME["accent_gold"])
             if hasattr(self, "tab_smart") and self.tab_smart:
                 self.tab_smart.update_endpoint_display(dev_name, is_hp)
-            if hasattr(self, "meter_service"):
-                self.meter_service.invalidate()
             mode_desc = "Headphones (Full 20Hz Sub-Bass)" if is_hp else "Laptop Speakers (Anti-Rattle 120Hz)"
             self.lbl_status.configure(text=f"Hardware Endpoint: {dev_name} → {mode_desc}", text_color=THEME["accent_gold"])
             self.show_toast(f"{device_icon} Endpoint: {dev_name[:24]}", mode_desc, icon=device_icon)
@@ -1253,8 +1273,6 @@ class SoniqDesktopApp(ctk.CTk):
         self.audio_content_monitor.shutdown()
         if hasattr(self, "endpoint_watcher"):
             self.endpoint_watcher.stop()
-        if hasattr(self, "meter_service"):
-            self.meter_service.stop()
         self.hotkey_service.stop()
         self.tray_service.stop()
         try:
