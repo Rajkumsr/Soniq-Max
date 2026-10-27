@@ -1,0 +1,9 @@
+customtkinter
+psutil
+Pillow
+pystray
+pycaw
+comtypes
+numpy
+soundcard
+onnxruntime
