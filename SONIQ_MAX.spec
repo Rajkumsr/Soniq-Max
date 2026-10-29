@@ -4,10 +4,6 @@ import os
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('soniq_icon.ico', '.')]
-datas += [
-    (os.path.join('models', 'yamnet', filename), os.path.join('models', 'yamnet'))
-    for filename in ('yamnet.onnx', 'yamnet_class_map.csv', 'custom_category_map.csv', 'LICENSE')
-]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')
@@ -20,8 +16,7 @@ tmp_ret = collect_all('comtypes')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('soundcard')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-tmp_ret = collect_all('onnxruntime')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+# onnxruntime removed
 
 
 a = Analysis(

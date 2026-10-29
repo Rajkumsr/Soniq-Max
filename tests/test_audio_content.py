@@ -2,13 +2,13 @@ import unittest
 
 import numpy as np
 
-from audio_content import YamnetAudioClassifier, _classify_scores, load_custom_category_map
+from audio_content import LightweightDspClassifier, YamnetAudioClassifier, _classify_scores
 
 
 class AudioContentAnalysisTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.classifier = YamnetAudioClassifier()
+        cls.classifier = LightweightDspClassifier()
 
     def test_model_detects_silence_without_retaining_audio(self):
         result = self.classifier.analyze(np.zeros((16000, 2), dtype=np.float32))
@@ -38,6 +38,31 @@ class AudioContentAnalysisTests(unittest.TestCase):
         self.assertGreaterEqual(result.category_score, 0.20)
         self.assertTrue(result.top_label)
         self.assertGreater(result.top_score, 0.0)
+
+    def test_model_recognizes_speech_formants(self):
+        sample_rate = 16000
+        time_axis = np.arange(sample_rate, dtype=np.float32) / sample_rate
+        # Formants concentrated between 500 Hz and 2500 Hz with no sub-bass
+        speech = (
+            0.08 * np.sin(2 * np.pi * 500 * time_axis)
+            + 0.06 * np.sin(2 * np.pi * 1500 * time_axis)
+            + 0.04 * np.sin(2 * np.pi * 2500 * time_axis)
+        ).astype(np.float32)
+
+        result = self.classifier.analyze(speech)
+        self.assertEqual(result.category, "speech")
+        self.assertGreaterEqual(result.category_score, 0.50)
+
+    def test_model_recognizes_gaming_transients(self):
+        # Sharp high-crest transient spike
+        transient = np.zeros(16000, dtype=np.float32)
+        transient[1000:1050] = 0.9 * np.sin(np.linspace(0, 10 * np.pi, 50))
+        transient[1050:1500] = 0.5 * np.exp(-np.linspace(0, 5, 450)) * np.sin(
+            2 * np.pi * 80 * np.linspace(0, 0.1, 450)
+        )
+
+        result = self.classifier.analyze(transient)
+        self.assertEqual(result.category, "gaming")
 
     def test_mono_and_stereo_audio_produce_consistent_results(self):
         sample_rate = 16000
@@ -87,19 +112,6 @@ class AudioContentAnalysisTests(unittest.TestCase):
         result = _classify_scores(scores, labels, rms=0.1, category_map=custom_map)
         self.assertEqual(result.category, "gaming")
         self.assertEqual(result.top_label, "Gunshot")
-
-        scores_cinema = np.array([[0.05, 0.1, 0.2, 0.9]], dtype=np.float32)
-        result_cinema = _classify_scores(scores_cinema, labels, rms=0.1, category_map=custom_map)
-        self.assertEqual(result_cinema.category, "cinema")
-        self.assertEqual(result_cinema.top_label, "Explosion")
-
-    def test_load_custom_category_map_file(self):
-        mapping = load_custom_category_map()
-        self.assertIsInstance(mapping, dict)
-        self.assertGreater(len(mapping), 0)
-        self.assertIn("gaming", mapping.values())
-        self.assertIn("music", mapping.values())
-        self.assertIn("speech", mapping.values())
 
 
 if __name__ == "__main__":

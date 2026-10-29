@@ -6,4 +6,3 @@ pycaw
 comtypes
 numpy
 soundcard
-onnxruntime
