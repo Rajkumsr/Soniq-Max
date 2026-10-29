@@ -287,14 +287,31 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
 
     # Special Browser Fast-Path: inspect window tab title for instant zero-latency routing
     if proc_lower in SENSE_BROWSER_PROCESSES:
+        # 1. Voice communications (Discord web, Zoom web, Teams, Meet)
         if any(k in title for k in VOICE_INDICATORS):
             return "voice_meeting", f"🎙️ {short_name}: Web Call"
-        if "youtube music" in title or "soundcloud" in title or any(k in title for k in ("spotify", "pandora", "deezer", "music.apple")):
+
+        # 2. Dedicated web music services
+        if any(k in title for k in ("youtube music", "soundcloud", "spotify", "pandora", "deezer", "music.apple", "tidal", "bandcamp")):
             return "bass_beast", f"🎵 {short_name}: Music Stream"
-        if any(k in title for k in VIDEO_INDICATORS):
+
+        # 3. Explicit music titles on YouTube / Web Media
+        if any(k in title for k in MUSIC_INDICATORS):
+            clean_title = title[:24] + "..." if len(title) > 24 else title
+            return "bass_beast", f"🎵 {clean_title if clean_title else short_name}"
+
+        # 4. Cinema streaming services & explicit movie/trailer keywords
+        cinema_stream_indicators = (
+            "netflix", "prime video", "primevideo", "hotstar", "disney+", "hulu",
+            "hbo", "max.com", "twitch", "vimeo", "crunchyroll", "movie", "film",
+            "trailer", "season", "episode", "series", "cinema", "documentary"
+        )
+        if any(k in title for k in cinema_stream_indicators):
             clean_title = title[:24] + "..." if len(title) > 24 else title
             return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
-        # Unclassified browser stream -> return None so YAMNet AI loopback takes over
+
+        # 5. Unclassified browser media (including generic YouTube streams without keywords)
+        # Return None, None so the YAMNet AI loopback classifier analyzes actual audio waveforms!
         return None, None
 
     # 1. Fullscreen & Borderless Gaming Check
@@ -326,7 +343,13 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
     if proc_lower in SENSE_LOCAL_MUSIC_PROCESSES or any(k in title or k in proc_lower for k in MUSIC_INDICATORS):
         return "bass_beast", f"🎵 {short_name}: Music Stream"
 
-    # 5. Dynamic Video / Cinema keywords in active window
+    # 5. Multi-format players (VLC, MPC, PotPlayer, KMPlayer): check if audio file before cinema
+    audio_extensions = (".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".wma", ".alac")
+    if proc_lower in ("vlc.exe", "mpc-hc.exe", "mpc-be.exe", "potplayermini64.exe", "kmplayer.exe"):
+        if any(ext in title for ext in audio_extensions) or any(k in title for k in MUSIC_INDICATORS):
+            return "bass_beast", f"🎵 {short_name}: Audio Track"
+
+    # 6. Dynamic Video / Cinema keywords in active window
     if proc_lower in SENSE_LOCAL_VIDEO_PROCESSES or any(k in title for k in VIDEO_INDICATORS):
         clean_title = title[:24] + "..." if len(title) > 24 else title
         return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"

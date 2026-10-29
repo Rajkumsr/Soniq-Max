@@ -200,10 +200,16 @@ SENSE_LOCAL_MUSIC_PROCESSES = frozenset({
     "tidal.exe",
     "deezer.exe",
     "wmplayer.exe",
+    "microsoft.media.player.exe",
+    "media.player.exe",
+    "music.ui.exe",
     "audacious.exe",
     "cider.exe",
     "amazonmusic.exe",
     "soundcloud.exe",
+    "mediamonkey.exe",
+    "dopamine.exe",
+    "resonic.exe",
 })
 
 SENSE_LOCAL_VIDEO_PROCESSES = frozenset({
@@ -241,12 +247,15 @@ VOICE_INDICATORS = (
 
 MUSIC_INDICATORS = (
     "music", "song", "track", "album", "spotify", "sound", "audio", "radio", 
-    "podcast", "playlist", "official audio", "official video", "lyrics",
-    "youtube music", ".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", "soundcloud"
+    "podcast", "playlist", "official audio", "official video", "lyrics", "lyric video",
+    "youtube music", "remix", "mix", "feat.", "ft.", "prod.", "visualizer",
+    "instrumental", "acoustic", "live performance", "soundtrack", "ost", "lofi",
+    "beats", "bass boosted", "slowed", "reverb", ".mp3", ".flac", ".wav",
+    ".m4a", ".aac", ".ogg", ".opus", ".wma", ".alac", "soundcloud", "bandcamp"
 )
 
 VIDEO_INDICATORS = (
-    "youtube", "netflix", "prime", "hotstar", "twitch", "vimeo", "movie", "film", 
+    "netflix", "prime", "hotstar", "twitch", "vimeo", "movie", "film", 
     "watch", "cinema", "trailer", "season", "episode", "1080p", "720p", "2160p", "4k", 
     ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".webm"
 )
