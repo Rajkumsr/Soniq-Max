@@ -1283,6 +1283,12 @@ class SoniqDesktopApp(ctk.CTk):
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
             value = winreg.QueryValueEx(key, "SONIQ_MAX")[0]
             winreg.CloseKey(key)
+            if not value:
+                return False
+            # Verify registered binary actually exists on disk
+            match = re.match(r'^\s*"?([^"]+)"?', value)
+            if match:
+                return os.path.isfile(match.group(1).strip())
             return bool(value)
         except Exception:
             return False
@@ -1292,8 +1298,15 @@ class SoniqDesktopApp(ctk.CTk):
         try:
             key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_ALL_ACCESS)
             if enable:
-                exe_path = sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__)
-                val = f'"{exe_path}" --minimized'
+                if getattr(sys, 'frozen', False):
+                    val = f'"{sys.executable}" --minimized'
+                else:
+                    dist_exe = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "SONIQ_MAX.exe"))
+                    if os.path.isfile(dist_exe):
+                        val = f'"{dist_exe}" --minimized'
+                    else:
+                        pythonw = sys.executable.replace("python.exe", "pythonw.exe")
+                        val = f'"{pythonw}" "{os.path.abspath(__file__)}" --minimized'
                 winreg.SetValueEx(key, "SONIQ_MAX", 0, winreg.REG_SZ, val)
                 self.lbl_status.configure(text="✓ Added to Windows Startup. Will run silently in tray on boot.", text_color=THEME["accent_green"])
             else:
