@@ -85,6 +85,62 @@ class SettingsTab(ctk.CTkFrame):
         btn_sound_cpl.pack(side="right")
         FluentTooltip(btn_sound_cpl, title="Windows Sound Control Panel", text="Launches classic mmsys.cpl to configure default playback devices and sample rates.")
 
+        # Card 2: Native SONIQ MAX VST 2.4 Audio Engine
+        self.c_vst = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
+        self.c_vst.pack(fill="x", pady=6)
+
+        vst_top = ctk.CTkFrame(self.c_vst, fg_color="transparent")
+        vst_top.pack(fill="x", padx=16, pady=(12, 4))
+
+        vst_title = ctk.CTkLabel(vst_top, text="🎛️ Native Psychoacoustic DSP Engine (VST 2.4)", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=THEME["accent_gold"])
+        vst_title.pack(side="left")
+
+        self.vst_status_lbl = ctk.CTkLabel(vst_top, text="", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
+        self.vst_status_lbl.pack(side="right")
+
+        vst_desc = ctk.CTkLabel(
+            self.c_vst,
+            text=(
+                "Proprietary 64-bit real-time C++ audio plugin for Equalizer APO.\n"
+                "• Psychoacoustic 2nd/3rd Harmonic Exciter (deep bass on small speakers/headphones)\n"
+                "• Dynamic 2.8 kHz Formant Vocal Clarity Boost\n"
+                "• 3D Binaural Spatializer (Haas interaural delay & phase widening)\n"
+                "• Hardware-grade Soft-Knee Brickwall Peak Limiter (0 dBFS digital protection)"
+            ),
+            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
+        )
+        vst_desc.pack(anchor="w", padx=16, pady=(0, 10))
+
+        vst_btn_row = ctk.CTkFrame(self.c_vst, fg_color="transparent")
+        vst_btn_row.pack(fill="x", padx=16, pady=(0, 14))
+
+        self.switch_vst = ctk.CTkSwitch(
+            vst_btn_row,
+            text="Enable Native VST Processing",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=THEME["text_main"],
+            progress_color=THEME["accent_green"],
+            command=self.controller.toggle_vst
+        )
+        self.switch_vst.pack(side="left", padx=(0, 14))
+        FluentTooltip(self.switch_vst, title="Toggle VST Engine", text="Directly activates/deactivates the SoniqMaxDSP plugin inside Equalizer APO.")
+
+        self.btn_compile_vst = ctk.CTkButton(
+            vst_btn_row,
+            text="🔨 Compile & Deploy VST",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=THEME["btn_secondary"],
+            text_color=THEME["accent_gold"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["card_border"],
+            command=self.controller.build_vst_plugin
+        )
+        self.btn_compile_vst.pack(side="left")
+        FluentTooltip(self.btn_compile_vst, title="Build VST Plugin", text="Runs vst/build_vst.bat to compile SoniqMaxDSP.dll and install it to Equalizer APO's VST folder.")
+
+        self.update_vst_ui()
+
         # Card 2: Collapsible Accordion for Global System Hotkeys
         self.c_hk = CollapsibleSection(
             self.container,
@@ -212,7 +268,32 @@ class SettingsTab(ctk.CTkFrame):
         )
         ab_text.pack(anchor="w", padx=16, pady=(0, 14))
 
+    def update_vst_ui(self):
+        installed = self.controller.is_vst_installed()
+        if installed:
+            self.vst_status_lbl.configure(
+                text="✓ Active in Equalizer APO (SoniqMaxDSP.dll)",
+                text_color=THEME["accent_green"]
+            )
+            self.btn_compile_vst.configure(text="🔨 Recompile VST")
+        else:
+            self.vst_status_lbl.configure(
+                text="⚡ Source Ready (vst/src/) · Ready to build",
+                text_color=THEME["accent_bronze"]
+            )
+            self.btn_compile_vst.configure(text="🔨 Compile & Deploy VST")
+
+        if getattr(self.controller, "use_vst", True) and installed:
+            self.switch_vst.select()
+        else:
+            if not installed:
+                self.switch_vst.deselect()
+            elif getattr(self.controller, "use_vst", True):
+                self.switch_vst.select()
+            else:
+                self.switch_vst.deselect()
+
     def animate_staggered_entrance(self):
         """Sequential waterfall entrance for Settings view."""
-        cards = [self.c_apo, self.c_hk, self.c_advanced, self.c_boot, self.c_about]
+        cards = [self.c_apo, self.c_vst, self.c_hk, self.c_advanced, self.c_boot, self.c_about]
         stagger_cascade_entrance(self.container, cards, step_delay_ms=22)

@@ -26,7 +26,7 @@ import customtkinter as ctk
 
 from audio_content import AudioContentMonitor
 from constants import (
-    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH,
+    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, APO_VST_DIR,
     DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
@@ -152,6 +152,7 @@ class SoniqDesktopApp(ctk.CTk):
         self._auto_apply_pending_profile_key = None
         self._auto_apply_retry_after = 0.0
         self._sense_content_monitor_active = False
+        self.use_vst = True
         self.sense_profile_assignments = DEFAULT_SENSE_PROFILE_ASSIGNMENTS.copy()
         self.audio_content_monitor = AudioContentMonitor()
 
@@ -226,6 +227,7 @@ class SoniqDesktopApp(ctk.CTk):
                 ("is_enhanced", True),
                 ("night_mode", False),
                 ("auto_app_enabled", True),
+                ("use_vst", True),
             ):
                 value = data.get(key, default)
                 if type(value) is bool:
@@ -830,6 +832,10 @@ class SoniqDesktopApp(ctk.CTk):
                 "volume_boost_db": self.tab_audio.slider_volume.get() / 10 if enabled_effects["volume"] else 0.0,
             }
 
+        vst_plugins = None
+        if getattr(self, "use_vst", True) and os.path.isfile(APO_VST_PLUGIN_PATH):
+            vst_plugins = [f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"]
+
         if not self.is_enhanced:
             apo_text = "# SONIQ MAX: BYPASSED (other APO config remains active)\nPreamp: 0.0 dB\n"
         else:
@@ -838,7 +844,8 @@ class SoniqDesktopApp(ctk.CTk):
                 eq_gains=p.get("eq", [0.0]*10),
                 **profile_values,
                 night_mode=(self.night_mode and enabled_effects["volume"]),
-                is_headphone=getattr(self, "is_headphone", False)
+                is_headphone=getattr(self, "is_headphone", False),
+                vst_plugins=vst_plugins,
             )
 
         local_cfg = os.path.join(get_base_dir(), "SONIQ_APO_Config.txt")
@@ -962,6 +969,24 @@ class SoniqDesktopApp(ctk.CTk):
             except Exception:
                 logger.exception("Initial Windows audio endpoint detection failed")
         threading.Thread(target=_bg, daemon=True).start()
+
+    def is_vst_installed(self):
+        return os.path.isfile(APO_VST_PLUGIN_PATH)
+
+    def toggle_vst(self):
+        self.use_vst = not getattr(self, "use_vst", True)
+        self.save_persisted_profile()
+        self.apply_to_system_audio()
+        if hasattr(self, "tab_settings"):
+            self.tab_settings.update_vst_ui()
+
+    def build_vst_plugin(self):
+        vst_bat = os.path.join(get_base_dir(), "vst", "build_vst.bat")
+        if os.path.isfile(vst_bat):
+            try:
+                os.startfile(vst_bat)
+            except Exception as e:
+                logger.error("Failed to launch build_vst.bat: %s", e)
 
     def open_sound_cpl(self):
         open_sound_control_panel()

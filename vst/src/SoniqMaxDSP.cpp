@@ -100,6 +100,7 @@ public:
         std::memset(&effect, 0, sizeof(AEffect));
         effect.magic = kEffectMagic;
         effect.dispatcher = dispatcherCallback;
+        effect.process = processReplacingCallback;
         effect.processReplacing = processReplacingCallback;
         effect.setParameter = setParameterCallback;
         effect.getParameter = getParameterCallback;
@@ -241,6 +242,13 @@ public:
                     case kParamSpatial: std::strncpy(static_cast<char*>(ptr), "%", 31); return 1;
                     case kParamLimiter: std::strncpy(static_cast<char*>(ptr), "On/Off", 31); return 1;
                     case kParamMasterGain: std::strncpy(static_cast<char*>(ptr), "x", 31); return 1;
+                }
+                return 0;
+            case effGetVstVersion:
+                return 2400;
+            case effCanDo:
+                if (ptr) {
+                    if (std::strcmp(static_cast<const char*>(ptr), "bypass") == 0) return 1;
                 }
                 return 0;
             default:

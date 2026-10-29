@@ -25,6 +25,12 @@ APO_DEFAULT_PATH = os.environ.get(
     "SONIQ_MAX_APO_CONFIG_PATH",
     r"C:\Program Files\EqualizerAPO\config\config.txt"
 )
+APO_VST_DIR = os.environ.get(
+    "SONIQ_MAX_APO_VST_DIR",
+    r"C:\Program Files\EqualizerAPO\VSTPlugins"
+)
+APO_VST_PLUGIN_NAME = "SoniqMaxDSP.dll"
+APO_VST_PLUGIN_PATH = os.path.join(APO_VST_DIR, APO_VST_PLUGIN_NAME)
 
 try:
     import winreg

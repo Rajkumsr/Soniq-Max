@@ -211,6 +211,19 @@ class ApoConfigTests(unittest.TestCase):
             self.assertEqual(second_result.count("Include: SONIQ_MAX_Config.txt"), 1)
             self.assertIn("Preamp: +2 dB", managed_content)
 
+    def test_vst_plugin_directive_generation(self):
+        config = generate_apo_config(
+            "VST Test",
+            [0.0] * 10,
+            0.5,
+            0.5,
+            1.2,
+            2.0,
+            vst_plugins=["VSTPlugins\\SoniqMaxDSP.dll"]
+        )
+        self.assertIn("# Native VST Plugin Processing", config)
+        self.assertIn('VSTPlugin: Library "VSTPlugins\\SoniqMaxDSP.dll"', config)
+
     def test_install_creates_main_config_without_replacing_managed_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             main_config = os.path.join(temp_dir, "config.txt")
