@@ -2,7 +2,7 @@ import unittest
 
 import numpy as np
 
-from audio_content import YamnetAudioClassifier, _classify_scores
+from audio_content import YamnetAudioClassifier, _classify_scores, load_custom_category_map
 
 
 class AudioContentAnalysisTests(unittest.TestCase):
@@ -78,6 +78,28 @@ class AudioContentAnalysisTests(unittest.TestCase):
 
         self.assertEqual(music.category, "music")
         self.assertEqual(silence.category, "silence")
+
+    def test_custom_category_map_routing(self):
+        labels = ["Speech", "Music", "Gunshot", "Explosion"]
+        custom_map = {2: "gaming", 3: "cinema"}
+        scores = np.array([[0.05, 0.1, 0.85, 0.2]], dtype=np.float32)
+
+        result = _classify_scores(scores, labels, rms=0.1, category_map=custom_map)
+        self.assertEqual(result.category, "gaming")
+        self.assertEqual(result.top_label, "Gunshot")
+
+        scores_cinema = np.array([[0.05, 0.1, 0.2, 0.9]], dtype=np.float32)
+        result_cinema = _classify_scores(scores_cinema, labels, rms=0.1, category_map=custom_map)
+        self.assertEqual(result_cinema.category, "cinema")
+        self.assertEqual(result_cinema.top_label, "Explosion")
+
+    def test_load_custom_category_map_file(self):
+        mapping = load_custom_category_map()
+        self.assertIsInstance(mapping, dict)
+        self.assertGreater(len(mapping), 0)
+        self.assertIn("gaming", mapping.values())
+        self.assertIn("music", mapping.values())
+        self.assertIn("speech", mapping.values())
 
 
 if __name__ == "__main__":

@@ -27,7 +27,7 @@ import customtkinter as ctk
 from audio_content import AudioContentMonitor
 from constants import (
     THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH,
-    DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES,
+    DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
 )
@@ -1048,6 +1048,10 @@ class SoniqDesktopApp(ctk.CTk):
                 )
                 if local_music_playing:
                     content_target = self.sense_profile_assignments["music"]
+                elif analysis and analysis.category == "gaming":
+                    content_target = self.sense_profile_assignments["gaming"]
+                elif analysis and analysis.category == "cinema":
+                    content_target = self.sense_profile_for_detected_target("cinema_dialogue")
                 elif analysis and analysis.category == "speech":
                     content_target = self.sense_profile_assignments["speech"]
                 elif analysis and analysis.category == "music":
@@ -1055,14 +1059,22 @@ class SoniqDesktopApp(ctk.CTk):
 
                 # HIERARCHY EVALUATION:
                 # -------------------------------------------------------------
-                # Priority 1: Active 3D Fullscreen / Borderless Game has absolute priority
-                if fg_target == "fps_gaming":
-                    chosen_target = self.sense_profile_assignments["gaming"]
+                # Check for active voice communication stream in background
+                active_voice_src = any(
+                    s.get("name", "").casefold() in SENSE_VOICE_PROCESSES
+                    for s in cached_active_sources
+                )
 
-                elif fg_target == "voice_meeting":
+                # Priority 1: Active Voice Call (Discord, Zoom, Teams, Skype, WhatsApp)
+                # Voice intelligibility for live calls always takes precedence
+                if active_voice_src or fg_target == "voice_meeting":
                     chosen_target = self.sense_profile_assignments["speech"]
 
-                # Priority 2: Active Audio Stream in Windows Core Audio (Spotify, Chrome, YouTube, VLC, etc.)
+                # Priority 2: Active 3D Fullscreen / Borderless Game or Dedicated Game Engine
+                elif fg_target == "fps_gaming":
+                    chosen_target = self.sense_profile_assignments["gaming"]
+
+                # Priority 3: Active Media Player or Browser Media Stream
                 elif cached_active_src:
                     src_proc = cached_active_src["name"]
                     src_pid = cached_active_src["pid"]
@@ -1077,17 +1089,21 @@ class SoniqDesktopApp(ctk.CTk):
                     )
                     if local_music_playing:
                         chosen_target = self.sense_profile_assignments["music"]
-                    elif content_target and bg_target not in ("fps_gaming", "voice_meeting"):
+                    elif bg_target == "fps_gaming":
+                        chosen_target = self.sense_profile_assignments["gaming"]
+                    elif bg_target in ("cinema_dialogue", "bass_beast", "voice_meeting"):
+                        chosen_target = self.sense_profile_for_detected_target(bg_target)
+                    elif content_target:
                         chosen_target = content_target
                     elif bg_target:
                         chosen_target = self.sense_profile_for_detected_target(bg_target)
 
-                # Use audio features when app metadata cannot identify a more specific call/game.
+                # Priority 4: AI Loopback Content Classifier (YAMNet unclassified streams)
                 elif content_target:
                     chosen_target = content_target
 
-                # Priority 3: Foreground dedicated media or communication app
-                elif fg_target and fg_target in ("voice_meeting", "cinema_dialogue", "bass_beast"):
+                # Priority 5: Foreground dedicated media app
+                elif fg_target and fg_target in ("cinema_dialogue", "bass_beast"):
                     chosen_target = self.sense_profile_for_detected_target(fg_target)
 
                 elif analysis and analysis.category == "other" and cached_active_src:
@@ -1128,7 +1144,16 @@ class SoniqDesktopApp(ctk.CTk):
                     last_error_log = now
 
             # Decoupled sleep: 0.30s when visible for quick cues, 1.50s when minimized in tray
-            time.sleep(0.30 if is_vis else 1.50)
+            # Decoupled sleep with laptop battery awareness:
+            # When on battery power, relax polling to conserve power.
+            poll_sleep = 0.30 if is_vis else 1.50
+            try:
+                battery = psutil.sensors_battery()
+                if battery and not battery.power_plugged:
+                    poll_sleep = 0.70 if is_vis else 2.20
+            except Exception:
+                pass
+            time.sleep(poll_sleep)
 
     def apply_auto_profile_silently(self, target_profile):
         if (

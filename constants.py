@@ -274,9 +274,12 @@ DEFAULT_SENSE_PROFILE_ASSIGNMENTS = {
 
 SENSE_TARGET_CATEGORIES = {
     "fps_gaming": "gaming",
+    "gaming": "gaming",
     "voice_meeting": "speech",
     "cinema_dialogue": "speech",
+    "cinema": "speech",
     "bass_beast": "music",
+    "music": "music",
     "other": "other",
 }
 

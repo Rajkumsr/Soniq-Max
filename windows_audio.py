@@ -14,6 +14,7 @@ from constants import (
     VOICE_INDICATORS,
     MUSIC_INDICATORS,
     VIDEO_INDICATORS,
+    SENSE_BROWSER_PROCESSES,
     SENSE_VOICE_PROCESSES,
     SENSE_LOCAL_MUSIC_PROCESSES,
     SENSE_LOCAL_VIDEO_PROCESSES,
@@ -212,6 +213,7 @@ def get_active_windows_output_device():
     """
     Queries Windows Core Audio API to dynamically find current active playback device
     and determine whether it is headphones/earphones or laptop internal speakers.
+    Combines native PKEY_AudioEndpoint_FormFactor hardware queries with friendly-name heuristics.
     """
     if not PYCAW_AVAILABLE:
         logger.warning("pycaw/COM is unavailable; using a generic audio endpoint label")
@@ -221,7 +223,26 @@ def get_active_windows_output_device():
         spk = AudioUtilities.GetSpeakers()
         if spk and spk.FriendlyName:
             name = spk.FriendlyName
-            is_hp = any(w in name.lower() for w in ("headphone", "earphone", "headset", "usb-c", "type-c", "buds", "airpod", "iem", "dac"))
+            is_hp = False
+            # 1. Hardware FormFactor Query via PKEY_AudioEndpoint_FormFactor ({1da5d803...}, 0)
+            try:
+                props = getattr(spk, "properties", {})
+                for k, v in props.items():
+                    k_str = str(k).upper()
+                    if "1DA5D803" in k_str and k_str.strip().endswith(" 0"):
+                        # EndpointFormFactor: 3=Headphones, 5=Headset, 6=Handset
+                        if v in (3, 5, 6):
+                            is_hp = True
+                            break
+                        elif v == 1:  # Speakers
+                            is_hp = False
+                            break
+            except Exception:
+                pass
+
+            # 2. String heuristic fallback / refinement
+            if not is_hp:
+                is_hp = any(w in name.lower() for w in ("headphone", "earphone", "headset", "usb-c", "type-c", "buds", "airpod", "iem", "dac"))
             return name, is_hp
     except Exception:
         logger.exception("Could not query the active Windows audio endpoint")
@@ -263,6 +284,18 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
             pass
 
     short_name = proc_name.replace(".exe", "").title()
+
+    # Special Browser Fast-Path: inspect window tab title for instant zero-latency routing
+    if proc_lower in SENSE_BROWSER_PROCESSES:
+        if any(k in title for k in VOICE_INDICATORS):
+            return "voice_meeting", f"🎙️ {short_name}: Web Call"
+        if "youtube music" in title or "soundcloud" in title or any(k in title for k in ("spotify", "pandora", "deezer", "music.apple")):
+            return "bass_beast", f"🎵 {short_name}: Music Stream"
+        if any(k in title for k in VIDEO_INDICATORS):
+            clean_title = title[:24] + "..." if len(title) > 24 else title
+            return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
+        # Unclassified browser stream -> return None so YAMNet AI loopback takes over
+        return None, None
 
     # 1. Fullscreen & Borderless Gaming Check
     if hwnd:

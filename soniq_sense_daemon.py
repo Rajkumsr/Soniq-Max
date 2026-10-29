@@ -28,7 +28,7 @@ from constants import (
     SENSE_VOICE_PROCESSES as VOICE_PROCESSES,
 )
 from export_system_apo import generate_apo_config, install_apo_config
-from windows_audio import classify_audio_stream_dynamically, get_process_name_by_pid
+from windows_audio import classify_audio_stream_dynamically, get_process_name_by_pid, get_active_windows_output_device
 
 logger = logging.getLogger("soniq_sense")
 
@@ -318,22 +318,23 @@ class SoniqSenseDaemon:
             return
 
         profile = DEFAULT_PROFILES[profile_key]
-        speaker_mode = False
+        is_hp = False
         try:
-            import soundcard as sc
-
-            speaker = sc.default_speaker()
-            if speaker:
-                speaker_name = str(speaker.name).casefold()
-                speaker_mode = any(
-                    keyword in speaker_name
-                    for keyword in (
-                        "headphone", "earphone", "headset", "usb-c", "type-c",
-                        "buds", "airpod", "iem", "dac",
-                    )
-                )
+            _, is_hp = get_active_windows_output_device()
         except Exception:
-            logger.warning("Could not identify output-device type; using speaker filters.", exc_info=True)
+            try:
+                import soundcard as sc
+                speaker = sc.default_speaker()
+                if speaker:
+                    is_hp = any(
+                        keyword in str(speaker.name).casefold()
+                        for keyword in (
+                            "headphone", "earphone", "headset", "usb-c", "type-c",
+                            "buds", "airpod", "iem", "dac",
+                        )
+                    )
+            except Exception:
+                logger.warning("Could not identify output-device type; using speaker filters.", exc_info=True)
 
         content = generate_apo_config(
             preset_name=profile["title"],
@@ -342,7 +343,7 @@ class SoniqSenseDaemon:
             clarity=profile["clarity"] / 100,
             spatial_width=profile["spatial"] / 100,
             volume_boost_db=profile["volume"],
-            is_headphone=speaker_mode,
+            is_headphone=is_hp,
         )
         try:
             managed_path = install_apo_config(self.config_path, content)
@@ -428,6 +429,10 @@ class SoniqSenseDaemon:
         if result.category == "music":
             profile_key = self.music_profile
         elif result.category == "speech":
+            profile_key = self.speech_profile
+        elif result.category == "gaming":
+            profile_key = self.game_profile
+        elif result.category == "cinema":
             profile_key = self.speech_profile
         else:
             self.consensus.observe(None)

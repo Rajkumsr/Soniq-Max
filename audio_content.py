@@ -60,7 +60,40 @@ def downsample_48k_stereo_to_16k_mono(samples):
     return filtered[::YAMNET_DECIMATION].astype(np.float32)
 
 
-def _classify_scores(scores, labels, rms):
+def load_custom_category_map(csv_path=None):
+    """
+    Loads custom sound label -> category mappings.
+    Looks for custom_category_map.csv in specified path, app root, or bundled models directory.
+    Returns dict: normalized display_name (casefold) -> category.
+    """
+    candidates = []
+    if csv_path:
+        candidates.append(csv_path)
+    from constants import get_base_dir, get_asset_dir
+    candidates.append(os.path.join(get_base_dir(), "custom_category_map.csv"))
+    candidates.append(os.path.join(get_asset_dir(), "models", "yamnet", "custom_category_map.csv"))
+
+    for path in candidates:
+        if os.path.isfile(path):
+            cat_map = {}
+            try:
+                with open(path, newline="", encoding="utf-8") as stream:
+                    for row in csv.DictReader(stream):
+                        name = row.get("display_name", "").strip().casefold()
+                        cat = row.get("category", "").strip().casefold()
+                        idx_str = row.get("index", "").strip()
+                        if name and cat:
+                            cat_map[name] = cat
+                        if idx_str.isdigit() and cat:
+                            cat_map[int(idx_str)] = cat
+                if cat_map:
+                    return cat_map
+            except Exception:
+                pass
+    return None
+
+
+def _classify_scores(scores, labels, rms, category_map=None):
     score_matrix = np.asarray(scores, dtype=np.float32)
     if score_matrix.ndim == 1:
         mean_scores = score_matrix
@@ -74,6 +107,34 @@ def _classify_scores(scores, labels, rms):
     top_index = int(np.argmax(mean_scores))
     top_label = labels[top_index]
     top_score = float(mean_scores[top_index])
+
+    if rms < SILENCE_RMS or (top_label.casefold() == "silence" and top_score >= 0.5):
+        return AudioAnalysis("silence", top_score, rms, top_label, top_score)
+
+    # 1. Custom Category Mapping if provided
+    if category_map:
+        category_scores = {}
+        for idx, label in enumerate(labels):
+            cat = category_map.get(idx) or category_map.get(label.casefold())
+            if cat and cat != "other":
+                val = float(mean_scores[idx])
+                if val > category_scores.get(cat, 0.0):
+                    category_scores[cat] = val
+
+        priority = ("gaming", "speech", "cinema", "music")
+        best_cat = None
+        best_score = 0.0
+        for cat in sorted(category_scores.keys(), key=lambda c: (category_scores[c], -priority.index(c) if c in priority else 0), reverse=True):
+            if category_scores[cat] >= MIN_CATEGORY_SCORE:
+                best_cat = cat
+                best_score = category_scores[cat]
+                break
+
+        if best_cat:
+            return AudioAnalysis(best_cat, best_score, rms, top_label, top_score)
+        return AudioAnalysis("other", top_score, rms, top_label, top_score)
+
+    # 2. Fallback to default heuristic hints (preserves unit test backwards compatibility)
     normalized_labels = [label.casefold() for label in labels]
     speech_indices = [
         index for index, label in enumerate(normalized_labels)
@@ -86,8 +147,6 @@ def _classify_scores(scores, labels, rms):
     speech_score = float(mean_scores[speech_indices].max()) if speech_indices else 0.0
     music_score = float(mean_scores[music_indices].max()) if music_indices else 0.0
 
-    if rms < SILENCE_RMS or (top_label.casefold() == "silence" and top_score >= 0.5):
-        return AudioAnalysis("silence", top_score, rms, top_label, top_score)
     if speech_score >= MIN_CATEGORY_SCORE and speech_score > music_score:
         return AudioAnalysis("speech", speech_score, rms, top_label, top_score)
     if music_score >= MIN_CATEGORY_SCORE and music_score >= speech_score:
@@ -98,10 +157,11 @@ def _classify_scores(scores, labels, rms):
 class YamnetAudioClassifier:
     """CPU-only YAMNet classifier; input is mono float audio at 16 kHz."""
 
-    def __init__(self, model_path=None, class_map_path=None):
+    def __init__(self, model_path=None, class_map_path=None, category_map_path=None):
         asset_dir = os.path.join(get_asset_dir(), "models", "yamnet")
         self.model_path = model_path or os.path.join(asset_dir, "yamnet.onnx")
         self.class_map_path = class_map_path or os.path.join(asset_dir, "yamnet_class_map.csv")
+        self.category_map = load_custom_category_map(category_map_path)
         if not os.path.isfile(self.model_path):
             raise FileNotFoundError(f"YAMNet model was not found: {self.model_path}")
         if not os.path.isfile(self.class_map_path):
@@ -152,7 +212,7 @@ class YamnetAudioClassifier:
             ["output_0"],
             {self._input_name: audio},
         )[0]
-        return _classify_scores(scores, self.labels, rms)
+        return _classify_scores(scores, self.labels, rms, self.category_map)
 
 
 class AudioContentMonitor:

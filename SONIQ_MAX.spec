@@ -6,7 +6,7 @@ from PyInstaller.utils.hooks import collect_all
 datas = [('soniq_icon.ico', '.')]
 datas += [
     (os.path.join('models', 'yamnet', filename), os.path.join('models', 'yamnet'))
-    for filename in ('yamnet.onnx', 'yamnet_class_map.csv', 'LICENSE')
+    for filename in ('yamnet.onnx', 'yamnet_class_map.csv', 'custom_category_map.csv', 'LICENSE')
 ]
 binaries = []
 hiddenimports = []
