@@ -978,6 +978,12 @@ class SoniqDesktopApp(ctk.CTk):
             return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
         if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
             return LOCAL_VST_PLUGIN_PATH
+        parent_vst = os.path.abspath(os.path.join(get_base_dir(), "..", "vst", "bin", APO_VST_PLUGIN_NAME))
+        if os.path.isfile(parent_vst):
+            return parent_vst
+        root_vst = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vst", "bin", APO_VST_PLUGIN_NAME))
+        if os.path.isfile(root_vst):
+            return root_vst
         return None
 
     def is_vst_installed(self):

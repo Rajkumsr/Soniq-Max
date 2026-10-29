@@ -30,3 +30,4 @@ In `config.txt` or `SONIQ_MAX_Config.txt`:
 ```text
 VSTPlugin: Library "VSTPlugins\SoniqMaxDSP.dll"
 ```
+

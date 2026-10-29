@@ -67,3 +67,4 @@ struct AEffect {
     void (*processDoubleReplacing)(AEffect* effect, double** inputs, double** outputs, int32_t sampleFrames);
     char future[56];
 };
+

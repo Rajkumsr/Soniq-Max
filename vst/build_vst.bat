@@ -13,7 +13,7 @@ set APO_VST_DIR=C:\Program Files\EqualizerAPO\VSTPlugins
 
 if not exist bin mkdir bin
 
-:: 1. Check if compiler is already on PATH
+:: 1. Check if 64-bit compiler is already on current PATH
 where cl.exe >nul 2>&1
 if %errorlevel% equ 0 goto :COMPILE_MSVC
 
@@ -23,7 +23,16 @@ if %errorlevel% equ 0 goto :COMPILE_GCC
 where clang++ >nul 2>&1
 if %errorlevel% equ 0 goto :COMPILE_CLANG
 
-:: 2. Auto-detect Visual Studio via vswhere or standard directories
+:: 2. Check for WinLibs MinGW-w64 (64-bit) via WinGet
+for /d %%W in ("%LOCALAPPDATA%\Microsoft\WinGet\Packages\BrechtSanders.WinLibs*") do (
+    if exist "%%W\mingw64\bin\g++.exe" (
+        echo [FOUND] WinLibs MinGW-w64 [64-bit] at: %%W\mingw64\bin
+        set "PATH=%%W\mingw64\bin;!PATH!"
+        goto :COMPILE_GCC
+    )
+)
+
+:: 3. Auto-detect Visual Studio via vswhere or standard directories
 set VSWHERE="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe"
 if exist %VSWHERE% (
     for /f "usebackq tokens=*" %%i in (`%VSWHERE% -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do (
@@ -54,7 +63,7 @@ for %%V in (
     )
 )
 
-:: 3. Check common MinGW / MSYS2 paths
+:: 4. Check common MinGW-w64 / MSYS2 64-bit paths
 for %%M in (
     "C:\msys64\ucrt64\bin"
     "C:\msys64\mingw64\bin"
@@ -71,29 +80,27 @@ for %%M in (
 echo [ERROR] No C++ compiler found.
 echo.
 echo To build SoniqMaxDSP.dll, please install either:
-echo   1. Visual Studio Community (with C++ Desktop development workload)
-echo      https://visualstudio.microsoft.com/vs/community/
-echo   2. MSYS2 / MinGW-w64 (run: pacman -S mingw-w64-ucrt-x86_64-gcc)
-echo      https://www.msys2.org/
+echo   1. WinLibs MinGW-w64 [run: winget install BrechtSanders.WinLibs.POSIX.UCRT]
+echo   2. Visual Studio Community [with C++ Desktop development workload]
 echo.
 pause
 exit /b 1
 
 :COMPILE_MSVC
-echo [FOUND] Microsoft Visual C++ Compiler (cl.exe)
-echo Compiling SoniqMaxDSP.dll...
+echo [FOUND] Microsoft Visual C++ Compiler [cl.exe]
+echo Compiling SoniqMaxDSP.dll [64-bit]...
 cl.exe /LD /O2 /EHsc /std:c++17 /Isrc /Fe:"%OUT%" "%SRC%"
 goto :INSTALL
 
 :COMPILE_GCC
-echo [FOUND] GNU C++ Compiler (g++)
-echo Compiling SoniqMaxDSP.dll...
+echo [FOUND] GNU C++ Compiler [g++]
+echo Compiling SoniqMaxDSP.dll [64-bit]...
 g++ -O3 -shared -std=c++17 -Isrc -o "%OUT%" "%SRC%" -static-libgcc -static-libstdc++ -Wl,--kill-at
 goto :INSTALL
 
 :COMPILE_CLANG
 echo [FOUND] LLVM Clang++
-echo Compiling SoniqMaxDSP.dll...
+echo Compiling SoniqMaxDSP.dll [64-bit]...
 clang++ -O3 -shared -std=c++17 -Isrc -o "%OUT%" "%SRC%"
 goto :INSTALL
 
@@ -101,7 +108,7 @@ goto :INSTALL
 if exist "%OUT%" (
     echo.
     echo ===================================================
-    echo   [SUCCESS] Compiled SoniqMaxDSP.dll
+    echo   [SUCCESS] Compiled SoniqMaxDSP.dll [64-bit]
     echo   Location: %~dp0%OUT%
     echo ===================================================
     echo.
@@ -112,11 +119,12 @@ if exist "%OUT%" (
             echo [INSTALLED] Successfully copied to:
             echo   %APO_VST_DIR%\SoniqMaxDSP.dll
         ) else (
-            echo [NOTICE] Direct copy requires Administrator privileges.
-            echo Run this script as Administrator, or manually copy:
+            echo [NOTICE] Direct copy to C:\Program Files requires Administrator privileges.
+            echo SONIQ MAX will automatically load the plugin from your local build:
             echo   "%~dp0%OUT%"
-            echo into:
-            echo   "%APO_VST_DIR%\SoniqMaxDSP.dll"
+            echo.
+            echo Optional: To install system-wide, copy "%~dp0%OUT%"
+            echo into: "%APO_VST_DIR%\SoniqMaxDSP.dll"
         )
     )
     echo.
@@ -125,4 +133,3 @@ if exist "%OUT%" (
     echo [FAILED] Compilation failed.
 )
 echo.
-pause
