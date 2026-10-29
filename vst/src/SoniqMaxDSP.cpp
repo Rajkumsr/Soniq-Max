@@ -292,9 +292,4 @@ extern "C" {
         SoniqMaxEffect* effect = new SoniqMaxEffect();
         return &effect->effect;
     }
-
-    // Legacy entry point for compatibility with older VST 2.4 hosts
-    VST_EXPORT AEffect* main(audioMasterCallback audioMaster) {
-        return VSTPluginMain(audioMaster);
-    }
 }

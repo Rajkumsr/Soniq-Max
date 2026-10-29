@@ -31,6 +31,7 @@ APO_VST_DIR = os.environ.get(
 )
 APO_VST_PLUGIN_NAME = "SoniqMaxDSP.dll"
 APO_VST_PLUGIN_PATH = os.path.join(APO_VST_DIR, APO_VST_PLUGIN_NAME)
+LOCAL_VST_PLUGIN_PATH = os.path.join(get_base_dir(), "vst", "bin", APO_VST_PLUGIN_NAME)
 
 try:
     import winreg

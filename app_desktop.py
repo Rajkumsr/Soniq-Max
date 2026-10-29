@@ -26,7 +26,7 @@ import customtkinter as ctk
 
 from audio_content import AudioContentMonitor
 from constants import (
-    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, APO_VST_DIR,
+    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, APO_VST_DIR, LOCAL_VST_PLUGIN_PATH,
     DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
@@ -833,8 +833,10 @@ class SoniqDesktopApp(ctk.CTk):
             }
 
         vst_plugins = None
-        if getattr(self, "use_vst", True) and os.path.isfile(APO_VST_PLUGIN_PATH):
-            vst_plugins = [f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"]
+        if getattr(self, "use_vst", True):
+            active_vst = self.get_active_vst_path()
+            if active_vst:
+                vst_plugins = [active_vst]
 
         if not self.is_enhanced:
             apo_text = "# SONIQ MAX: BYPASSED (other APO config remains active)\nPreamp: 0.0 dB\n"
@@ -970,8 +972,16 @@ class SoniqDesktopApp(ctk.CTk):
                 logger.exception("Initial Windows audio endpoint detection failed")
         threading.Thread(target=_bg, daemon=True).start()
 
+    def get_active_vst_path(self):
+        """Returns relative APO path if in VSTPlugins folder, or absolute path to local build."""
+        if os.path.isfile(APO_VST_PLUGIN_PATH):
+            return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
+        if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
+            return LOCAL_VST_PLUGIN_PATH
+        return None
+
     def is_vst_installed(self):
-        return os.path.isfile(APO_VST_PLUGIN_PATH)
+        return self.get_active_vst_path() is not None
 
     def toggle_vst(self):
         self.use_vst = not getattr(self, "use_vst", True)
