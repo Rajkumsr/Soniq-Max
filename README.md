@@ -165,6 +165,11 @@ Soniq Max/
 
 ---
 
+## ☕ Support Soniq Max
+If this project helped you configure your audio, saved you time, or made your setup smoother, consider fueling my next coding session! 
+
+<a href="https://buymeacoffee.com/soniqmax" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="41" width="174"></a>
+
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
