@@ -239,7 +239,7 @@ SENSE_VOICE_PROCESSES = frozenset({
 
 GAMING_INDICATORS = (
     "steam", "epicgames", "riot", "valorant", "csgo", "cs2", "dota", "fortnite",
-    "cod", "warzone", "minecraft", "overwatch", "apex", "pubg", "cyberpunk",
+    "call of duty", "callofduty", "cod.exe", "warzone", "minecraft", "overwatch", "apex", "pubg", "cyberpunk",
     "gta", "unreal", "unity", "directx", "vulkan", "battlefield", "rdr2", "forza",
     "eldenring", "witcher", "destiny", "tarkov", "genshin", "honkai", "gameloop",
     "roblox", "leagueoflegends", "ubisoft", "ea desktop", "origin", "battlenet",

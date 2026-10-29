@@ -267,6 +267,15 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
     if proc_lower in ("soniq_max.exe", "python.exe", "pythonw.exe", "audiodg.exe"):
         return None, None
 
+    # Skip development editors, terminals, and file managers from ever matching game filters
+    DEV_AND_PRODUCTIVITY_PROCESSES = {
+        "code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "webstorm64.exe",
+        "sublime_text.exe", "notepad.exe", "notepad++.exe", "windowsterminal.exe",
+        "cmd.exe", "powershell.exe", "pwsh.exe", "explorer.exe", "taskmgr.exe"
+    }
+    if proc_lower in DEV_AND_PRODUCTIVITY_PROCESSES:
+        return None, None
+
     # If hwnd not provided or headless audio service, resolve main window of process family
     if not hwnd and pid:
         hwnd = get_hwnd_for_process_family(pid, proc_name)
