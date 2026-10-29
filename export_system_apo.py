@@ -135,6 +135,7 @@ def generate_apo_config(
     volume_boost_db,
     night_mode=False,
     is_headphone=False,
+    vst_plugins=None,
 ):
     """Generate Equalizer APO filters for a profile."""
     if not isinstance(preset_name, str) or not preset_name.strip():
@@ -206,6 +207,11 @@ def generate_apo_config(
 
     if night_mode:
         lines.extend(("", "# Night mode is a static 2 dB output trim, not dynamic compression."))
+
+    if vst_plugins:
+        lines.extend(("", "# Native VST Plugin Processing"))
+        for plugin in vst_plugins:
+            lines.append(f'VSTPlugin: Library "{plugin}"')
 
     return "\n".join(lines) + "\n"
 
