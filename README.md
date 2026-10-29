@@ -116,10 +116,10 @@ Compiled with `-O3` vector optimizations for modern x86_64 SIMD architectures:
 ### Option 1: Standalone Portable Binary (Zero Setup)
 Download or locate the precompiled single-file executable:
 ```powershell
-.\dist\SONIQ_MAX.exe
+.\dist\SONIQ_MAX\SONIQ_MAX.exe
 ```
-> [!NOTE]
-> The standalone distribution packages Python 3.13, CustomTkinter, NumPy, and SoundCard without external runtimes. UPX compression is intentionally disabled to guarantee 100% binary initialization stability on both **Windows 10** and **Windows 11**.
+> [!TIP]
+> Built in `--onedir` portable folder mode with all C-extensions, OpenBLAS, and Python runtimes pre-extracted in `_internal\`. This avoids runtime `%TEMP%` extraction, launches instantly, and is 100% stable across all **Windows 10** and **Windows 11** systems.
 
 ### Option 2: Run from Source
 
@@ -243,9 +243,11 @@ Soniq-Max/
 │   ├── tab_smart.py          # Soniq Sense auto-adaptation manager
 │   └── tab_settings.py       # VST controls, system startup, and hotkeys
 │
-├── dist/                     # Standalone Production Build
-│   ├── SONIQ_MAX.exe         # Single-file standalone Windows executable
-│   └── vst/bin/              # Portable VST distribution folder
+├── dist/                     # Portable Production Distribution
+│   └── SONIQ_MAX/            # Complete portable onedir application folder
+│       ├── SONIQ_MAX.exe     # Application launcher executable
+│       ├── _internal/        # Unpacked Python runtime, NumPy & OpenBLAS DLLs
+│       └── vst/bin/          # Native 64-bit VST 2.4 DSP plugin
 │
 ├── tests/                    # Automated pytest test suite (39 tests)
 │   ├── test_audio_content.py

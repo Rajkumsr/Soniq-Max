@@ -978,6 +978,9 @@ class SoniqDesktopApp(ctk.CTk):
             return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
         if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
             return LOCAL_VST_PLUGIN_PATH
+        internal_vst = os.path.abspath(os.path.join(get_asset_dir(), "vst", "bin", APO_VST_PLUGIN_NAME))
+        if os.path.isfile(internal_vst):
+            return internal_vst
         parent_vst = os.path.abspath(os.path.join(get_base_dir(), "..", "vst", "bin", APO_VST_PLUGIN_NAME))
         if os.path.isfile(parent_vst):
             return parent_vst
@@ -1301,7 +1304,9 @@ class SoniqDesktopApp(ctk.CTk):
                 if getattr(sys, 'frozen', False):
                     val = f'"{sys.executable}" --minimized'
                 else:
-                    dist_exe = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "SONIQ_MAX.exe"))
+                    dist_exe = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "SONIQ_MAX", "SONIQ_MAX.exe"))
+                    if not os.path.isfile(dist_exe):
+                        dist_exe = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "dist", "SONIQ_MAX.exe"))
                     if os.path.isfile(dist_exe):
                         val = f'"{dist_exe}" --minimized'
                     else:

@@ -4,6 +4,11 @@ import os
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('soniq_icon.ico', '.')]
+if os.path.isfile('custom_category_map.csv'):
+    datas.append(('custom_category_map.csv', '.'))
+if os.path.isfile('vst/bin/SoniqMaxDSP.dll'):
+    datas.append(('vst/bin/SoniqMaxDSP.dll', 'vst/bin'))
+
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')
@@ -18,7 +23,6 @@ tmp_ret = collect_all('soundcard')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('numpy')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
-# onnxruntime removed
 
 
 a = Analysis(
@@ -42,16 +46,13 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='SONIQ_MAX',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    upx_exclude=[],
-    runtime_tmpdir=None,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -60,3 +61,24 @@ exe = EXE(
     entitlements_file=None,
     icon=['soniq_icon.ico'],
 )
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='SONIQ_MAX',
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='SONIQ_MAX',
+)
+
