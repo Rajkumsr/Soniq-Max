@@ -267,11 +267,15 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
     if proc_lower in ("soniq_max.exe", "python.exe", "pythonw.exe", "audiodg.exe"):
         return None, None
 
-    # Skip development editors, terminals, and file managers from ever matching game filters
+    # Skip development editors, terminals, system settings, and OS utilities from ever matching game filters
     DEV_AND_PRODUCTIVITY_PROCESSES = {
         "code.exe", "devenv.exe", "idea64.exe", "pycharm64.exe", "webstorm64.exe",
         "sublime_text.exe", "notepad.exe", "notepad++.exe", "windowsterminal.exe",
-        "cmd.exe", "powershell.exe", "pwsh.exe", "explorer.exe", "taskmgr.exe"
+        "cmd.exe", "powershell.exe", "pwsh.exe", "explorer.exe", "taskmgr.exe",
+        "systemsettings.exe", "settings.exe", "applicationframehost.exe", "control.exe",
+        "mmc.exe", "regedit.exe", "calculator.exe", "calculatorapp.exe", "calc.exe",
+        "searchhost.exe", "startmenuexperiencehost.exe", "shellexperiencehost.exe",
+        "lockapp.exe", "textinputhost.exe", "dllhost.exe", "conhost.exe"
     }
     if proc_lower in DEV_AND_PRODUCTIVITY_PROCESSES:
         return None, None
@@ -323,23 +327,6 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
         # Return None, None so the YAMNet AI loopback classifier analyzes actual audio waveforms!
         return None, None
 
-    # 1. Fullscreen & Borderless Gaming Check
-    if hwnd:
-        try:
-            user32 = ctypes.windll.user32
-            rect = wintypes.RECT()
-            user32.GetWindowRect(hwnd, ctypes.byref(rect))
-            screen_w = user32.GetSystemMetrics(0)
-            screen_h = user32.GetSystemMetrics(1)
-            win_w = rect.right - rect.left
-            win_h = rect.bottom - rect.top
-            if win_w >= int(screen_w * 0.95) and win_h >= int(screen_h * 0.90):
-                browsers_and_tools = ("chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe", "explorer.exe", "code.exe", "devenv.exe")
-                if proc_lower not in browsers_and_tools:
-                    return "fps_gaming", f"{short_name} (💥 Battlefield 360)"
-        except Exception:
-            pass
-
     # 2. Dedicated Game Platform, Engine & Game Title Keywords
     if any(k in title or k in proc_lower for k in GAMING_INDICATORS):
         return "fps_gaming", f"{short_name} (💥 Battlefield 360)"
@@ -349,7 +336,7 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
         return "voice_meeting", f"🎙️ {short_name}: Voice / Call"
 
     # 4. Dynamic Music / Audio keywords & Dedicated Music Players
-    if proc_lower in SENSE_LOCAL_MUSIC_PROCESSES or any(k in title or k in proc_lower for k in MUSIC_INDICATORS):
+    if proc_lower in SENSE_LOCAL_MUSIC_PROCESSES or any(k in title for k in MUSIC_INDICATORS):
         return "bass_beast", f"🎵 {short_name}: Music Stream"
 
     # 5. Multi-format players (VLC, MPC, PotPlayer, KMPlayer): check if audio file before cinema
