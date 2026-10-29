@@ -60,55 +60,39 @@ Compiled with `-O3` vector optimizations for modern x86_64 SIMD architectures:
 
 ## 🏗️ System Architecture
 
-```mermaid
-flowchart TD
-    subgraph UserSpace["Desktop User Space"]
-        App["SONIQ MAX PRO (Desktop App / Daemon)"]
-        UI["CustomTkinter Fluent UI & System Tray"]
-        Sense["Soniq Sense Event Engine (WASAPI / Win32)"]
-        App --> UI
-        App --> Sense
-    end
-
-    subgraph ConfigLayer["Inter-Process Configuration Layer"]
-        Lock[".soniq_max_config.lock (Atomic Win32 File Lock)"]
-        ConfigFile["SONIQ_MAX_Config.txt (Managed Directive)"]
-        MasterConfig["config.txt (Equalizer APO Master)"]
-        App -->|"Atomic Export"| ConfigFile
-        MasterConfig -->|"Include Directive"| ConfigFile
-    end
-
-    subgraph AudioEngine["Windows 11 Kernel Audio Engine (audiodg.exe)"]
-        APOHost["Equalizer APO Host Engine"]
-        EQStage["10-Band Parametric Filter Stage"]
-        PreampStage["Estimated Headroom Preamp Compensation"]
-        VSTHost["VST 2.4 Host Loader"]
-        
-        APOHost --> PreampStage
-        PreampStage --> EQStage
-        EQStage --> VSTHost
-        
-        subgraph VSTPlugin["SoniqMaxDSP.dll (C++17 SIMD Engine)"]
-            Bass["① Harmonic Bass Exciter (tanh)"]
-            Vocal["② Vocal Formant Enhancer (1kHz / 3.2kHz)"]
-            Haas["③ 3D Haas Spatializer (12ms Ring Buffer)"]
-            Limiter["④ Soft-Knee Peak Limiter (0 dBFS Ceiling)"]
-            
-            Bass --> Vocal
-            Vocal --> Haas
-            Haas --> Limiter
-        end
-        
-        VSTHost --> VSTPlugin
-    end
-
-    subgraph Hardware["Physical Audio Output"]
-        Speakers["Laptop Speakers (120Hz HPF Anti-Rattle)"]
-        Headphones["Headphones (Full 20Hz Sub-Bass + 3D Haas)"]
-    end
-
-    VSTPlugin --> Speakers
-    VSTPlugin --> Headphones
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Windows System Audio Pipeline                        │
+│          (Spotify • YouTube • Games • VLC • Discord • System)          │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│            Windows Audio Engine (audiodg.exe) + Equalizer APO          │
+│                                                                        │
+│   ┌────────────────────────────────────────────────────────────────┐   │
+│   │ 1. Master Config Include (SONIQ_MAX_Config.txt)                │   │
+│   └───────────────────────────────┬────────────────────────────────┘   │
+│                                   │                                    │
+│   ┌───────────────────────────────▼────────────────────────────────┐   │
+│   │ 2. 10-Band Parametric EQ + Preamp Headroom Compensation        │   │
+│   └───────────────────────────────┬────────────────────────────────┘   │
+│                                   │                                    │
+│   ┌───────────────────────────────▼────────────────────────────────┐   │
+│   │ 3. SoniqMaxDSP.dll (Native 64-Bit C++17 Psychoacoustic VST)    │   │
+│   │    ├── ① Harmonic Bass Exciter (Synthesizes 2nd/3rd Harmonics) │   │
+│   │    ├── ② Formant Dialogue Engine (1.0 kHz & 3.2 kHz Resonance) │   │
+│   │    ├── ③ 3D Haas Spatializer (12ms Inter-Aural Delay Buffer)   │   │
+│   │    └── ④ Soft-Knee Dynamic Peak Limiter (0 dBFS Ceiling)       │   │
+│   └───────────────────────────────┬────────────────────────────────┘   │
+└───────────────────────────────────┼────────────────────────────────────┘
+                                    │
+          ┌─────────────────────────┴─────────────────────────┐
+          ▼                                                   ▼
+┌───────────────────────────────────┐               ┌───────────────────────────────────┐
+│     Laptop / Internal Speakers    │               │       Headphones / External DAC   │
+│    (Anti-Rattle 120Hz Protected)  │               │      (Full 20Hz Sub-Bass + 3D)    │
+└───────────────────────────────────┘               └───────────────────────────────────┘
 ```
 
 ---
@@ -283,9 +267,10 @@ Soniq-Max/
 ---
 
 ## ☕ Support Soniq Max
-If this project helped you configure your audio, saved you time, or made your setup smoother, consider fueling my next coding session!
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/soniqmax)
+If this project helped you configure your audio, saved you time, or made your setup smoother, consider fueling my next coding session! 
+
+<a href="https://buymeacoffee.com/soniqmax" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
 ## 📄 License
 
