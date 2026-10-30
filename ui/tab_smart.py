@@ -86,6 +86,25 @@ class SmartAppTab(ctk.CTkFrame):
         btn_refresh_ep.pack(side="left")
         FluentTooltip(btn_refresh_ep, title="Playback device", text="Refreshes the active output device used to select speaker or headphone filter tuning.")
 
+        self.btn_toggle_override = ctk.CTkButton(
+            ep_btn_row,
+            text="⚡ External 4.1 / Subwoofer (Full Bass)",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            fg_color=THEME["btn_secondary"],
+            text_color=THEME["accent_green"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["card_border"],
+            height=28,
+            command=self.controller.toggle_speaker_headphone_override,
+        )
+        self.btn_toggle_override.pack(side="left", padx=(10, 0))
+        FluentTooltip(
+            self.btn_toggle_override,
+            title="External 4.1 / Subwoofer Mode",
+            text="Click to bypass the 120 Hz anti-rattle filter. Essential when connecting Creative 4.1, 2.1, or subwoofers via 3.5mm jack.",
+        )
+
         # Card 2: Soniq Sense hybrid app and playback-content analysis
         self.c_stream = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
         self.c_stream.pack(fill="x", pady=6)
@@ -167,12 +186,49 @@ class SmartAppTab(ctk.CTkFrame):
         self._profile_choice_values = []
         self._build_profile_assignment_controls()
 
-    def update_endpoint_display(self, dev_name, is_hp):
+    def update_endpoint_display(self, dev_name, is_hp, force_full_range=False):
         """Refreshes endpoint labels."""
         self.lbl_endpoint_device.configure(text=f"Device: {dev_name}")
-        hp_tag = "HEADPHONES" if is_hp else "SPEAKERS"
-        hp_color = THEME["accent_green"] if is_hp else THEME["accent_bronze"]
+        if force_full_range:
+            hp_tag = "EXTERNAL 4.1 / SUBWOOFER (FULL 20Hz BASS)"
+            hp_color = THEME["accent_green"]
+            desc = (
+                "• Mode: External 4.1 / Subwoofer Override.\n"
+                "• Anti-Rattle 120 Hz filter is BYPASSED. Full 20 Hz deep sub-bass is unlocked for your Creative subwoofer!"
+            )
+            if hasattr(self, "btn_toggle_override"):
+                self.btn_toggle_override.configure(
+                    text="🔊 Re-enable Laptop Anti-Rattle (120Hz)",
+                    text_color=THEME["accent_bronze"],
+                )
+        elif is_hp:
+            hp_tag = "HEADPHONES"
+            hp_color = THEME["accent_green"]
+            desc = (
+                "• Mode: Headphones / Headset.\n"
+                "• No speaker high-pass filter is added (full 20 Hz sub-bass active)."
+            )
+            if hasattr(self, "btn_toggle_override"):
+                self.btn_toggle_override.configure(
+                    text="⚡ External 4.1 / Subwoofer (Full Bass)",
+                    text_color=THEME["accent_green"],
+                )
+        else:
+            hp_tag = "LAPTOP SPEAKERS (ANTI-RATTLE 120Hz)"
+            hp_color = THEME["accent_bronze"]
+            desc = (
+                "• Mode: Internal Laptop Speakers.\n"
+                "• 120 Hz high-pass anti-rattle filter is engaged to prevent laptop chassis rattling.\n"
+                "• When using Creative 4.1 or external speakers, click 'External 4.1 / Subwoofer' below to bypass this cut!"
+            )
+            if hasattr(self, "btn_toggle_override"):
+                self.btn_toggle_override.configure(
+                    text="⚡ External 4.1 / Subwoofer (Full Bass)",
+                    text_color=THEME["accent_green"],
+                )
+
         self.lbl_endpoint_badge.configure(text=f"● {hp_tag}", text_color=hp_color)
+        self.lbl_endpoint_details.configure(text=desc)
 
     def refresh_profile_choices(self):
         counts = {}

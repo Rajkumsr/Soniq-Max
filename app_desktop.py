@@ -159,6 +159,11 @@ class SoniqDesktopApp(ctk.CTk):
         # Fast Instant Hardware Endpoint Placeholder (populated asynchronously)
         self.current_device_name = "Speakers (Realtek Audio)"
         self.is_headphone = False
+        self.force_full_range = False
+
+    @property
+    def effective_is_headphone(self):
+        return self.is_headphone or getattr(self, "force_full_range", False)
 
         # Initialize Background Services
         self.hotkey_service = GlobalHotkeyManager(self.on_hotkey_triggered)
@@ -228,6 +233,7 @@ class SoniqDesktopApp(ctk.CTk):
                 ("night_mode", False),
                 ("auto_app_enabled", True),
                 ("use_vst", True),
+                ("force_full_range", False),
             ):
                 value = data.get(key, default)
                 if type(value) is bool:
@@ -275,6 +281,7 @@ class SoniqDesktopApp(ctk.CTk):
             "is_enhanced": self.is_enhanced,
             "night_mode": self.night_mode,
             "auto_app_enabled": self.auto_app_enabled,
+            "force_full_range": getattr(self, "force_full_range", False),
             "sense_profile_assignments": self.sense_profile_assignments,
         }
         try:
@@ -391,26 +398,41 @@ class SoniqDesktopApp(ctk.CTk):
         )
         app_sub.pack(anchor="w", pady=(2, 0))
 
-        # Center: Dynamic Device Pill & Status
+        # Center: Dynamic Device Pill & Status (Clickable to override Anti-Rattle for external 4.1 / subwoofers)
         center_box = ctk.CTkFrame(h_content, fg_color="transparent")
         center_box.pack(side="left", expand=True)
 
-        device_pill = ctk.CTkFrame(center_box, fg_color=THEME["pill_bg"], corner_radius=20, border_width=1, border_color=THEME["pill_border"])
-        device_pill.pack(pady=(0, 4))
+        self.device_pill = ctk.CTkFrame(center_box, fg_color=THEME["pill_bg"], corner_radius=20, border_width=1, border_color=THEME["pill_border"], cursor="hand2")
+        self.device_pill.pack(pady=(0, 4))
 
-        dot_col = THEME["accent_green"] if self.is_headphone else THEME["accent_gold"]
-        self.dev_dot = ctk.CTkLabel(device_pill, text="●", font=ctk.CTkFont(size=11), text_color=dot_col)
+        eff_hp = self.effective_is_headphone
+        dot_col = THEME["accent_green"] if eff_hp else THEME["accent_gold"]
+        self.dev_dot = ctk.CTkLabel(self.device_pill, text="●", font=ctk.CTkFont(size=11), text_color=dot_col, cursor="hand2")
         self.dev_dot.pack(side="left", padx=(10, 4), pady=3)
 
-        dev_icon = "🎧" if self.is_headphone else "🔊"
+        if self.force_full_range:
+            dev_icon = "⚡"
+            dev_text = "⚡ Creative / Ext (Full Bass)"
+        elif self.is_headphone:
+            dev_icon = "🎧"
+            dev_text = f"🎧 {self.current_device_name[:24]}"
+        else:
+            dev_icon = "🔊"
+            dev_text = f"🔊 {self.current_device_name[:24]}"
+
         self.dev_lbl = ctk.CTkLabel(
-            device_pill, 
-            text=f"{dev_icon} {self.current_device_name[:26]}", 
+            self.device_pill, 
+            text=dev_text, 
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=THEME["text_main"]
+            text_color=THEME["text_main"],
+            cursor="hand2"
         )
         self.dev_lbl.pack(side="left", padx=(0, 12), pady=3)
         self.lbl_device_pill = self.dev_lbl
+
+        self.device_pill.bind("<Button-1>", self.toggle_speaker_headphone_override)
+        self.dev_dot.bind("<Button-1>", self.toggle_speaker_headphone_override)
+        self.dev_lbl.bind("<Button-1>", self.toggle_speaker_headphone_override)
 
         self.lbl_active_app = ctk.CTkLabel(
             center_box,
@@ -420,7 +442,7 @@ class SoniqDesktopApp(ctk.CTk):
         )
         self.lbl_active_app.pack(pady=(1, 0))
 
-        FluentTooltip(self.dev_lbl, title="Hardware Endpoint", text="Active audio render endpoint detected via Windows Core Audio IMMDeviceEnumerator.")
+        FluentTooltip(self.dev_lbl, title="Audio Endpoint (Click to Toggle)", text="Click to switch between Laptop Speakers (120Hz Anti-Rattle) and External 4.1/Subwoofer (Full 20Hz Sub-Bass).")
         FluentTooltip(
             self.lbl_active_app,
             title="Soniq Sense",
@@ -846,7 +868,7 @@ class SoniqDesktopApp(ctk.CTk):
                 eq_gains=p.get("eq", [0.0]*10),
                 **profile_values,
                 night_mode=(self.night_mode and enabled_effects["volume"]),
-                is_headphone=getattr(self, "is_headphone", False),
+                is_headphone=self.effective_is_headphone,
                 vst_plugins=vst_plugins,
             )
 
@@ -879,7 +901,7 @@ class SoniqDesktopApp(ctk.CTk):
                     "Equalizer APO connected · SONIQ filters applied.",
                     True,
                 )
-                ep_type = "Headphones" if getattr(self, "is_headphone", False) else "Speakers"
+                ep_type = "Headphones / Full-Range" if self.effective_is_headphone else "Laptop Speakers"
                 applied_msg = (
                     f"Applied '{p['title']}' to Equalizer APO ({ep_type}); "
                     "existing config was preserved."
@@ -916,6 +938,23 @@ class SoniqDesktopApp(ctk.CTk):
         """
         self.after(0, self.refresh_audio_endpoint_ui)
 
+    def toggle_speaker_headphone_override(self, event=None):
+        self.force_full_range = not self.force_full_range
+        self.save_persisted_profile()
+        self.update_endpoint_pill(self.current_device_name, self.is_headphone)
+        if self.force_full_range:
+            self.show_toast(
+                "⚡ Full Sub-Bass Mode (20Hz)",
+                "Anti-Rattle 120Hz filter bypassed for Creative 4.1 / External Subwoofer.",
+                icon="⚡",
+            )
+        else:
+            self.show_toast(
+                "🔊 Laptop Speakers Mode",
+                "Anti-Rattle 120Hz protection re-engaged for internal laptop cones.",
+                icon="🔊",
+            )
+
     def refresh_audio_endpoint_ui(self):
         dev_name, is_hp = get_active_windows_output_device()
         self.update_endpoint_pill(dev_name, is_hp)
@@ -923,18 +962,36 @@ class SoniqDesktopApp(ctk.CTk):
     def update_endpoint_pill(self, dev_name, is_hp):
         self.current_device_name = dev_name
         self.is_headphone = is_hp
+        eff_hp = self.effective_is_headphone
+
         if hasattr(self, "audio_content_monitor") and self.auto_app_enabled:
             self.audio_content_monitor.reconnect()
-        device_icon = "🎧" if is_hp else "🔊"
+
+        if self.force_full_range:
+            device_icon = "⚡"
+            mode_desc = "External 4.1 / Subwoofer (Full 20Hz Sub-Bass)"
+            pill_text = "⚡ Creative / Ext (Full Bass)"
+            dot_color = THEME["accent_green"]
+        elif is_hp:
+            device_icon = "🎧"
+            mode_desc = "Headphones (Full 20Hz Sub-Bass)"
+            pill_text = f"🎧 {dev_name[:22]}"
+            dot_color = THEME["accent_green"]
+        else:
+            device_icon = "🔊"
+            mode_desc = "Laptop Speakers (Anti-Rattle 120Hz)"
+            pill_text = f"🔊 {dev_name[:24]}"
+            dot_color = THEME["accent_gold"]
 
         if getattr(self, "is_window_visible", True):
-            self.lbl_device_pill.configure(text=f"{device_icon} {dev_name}"[:26])
-            self.dev_dot.configure(text_color=THEME["accent_green"] if is_hp else THEME["accent_gold"])
+            if hasattr(self, "lbl_device_pill"):
+                self.lbl_device_pill.configure(text=pill_text)
+            if hasattr(self, "dev_dot"):
+                self.dev_dot.configure(text_color=dot_color)
             if hasattr(self, "tab_smart") and self.tab_smart:
-                self.tab_smart.update_endpoint_display(dev_name, is_hp)
-            mode_desc = "Headphones (Full 20Hz Sub-Bass)" if is_hp else "Laptop Speakers (Anti-Rattle 120Hz)"
-            self.lbl_status.configure(text=f"Hardware Endpoint: {dev_name} → {mode_desc}", text_color=THEME["accent_gold"])
-            self.show_toast(f"{device_icon} Endpoint: {dev_name[:24]}", mode_desc, icon=device_icon)
+                self.tab_smart.update_endpoint_display(dev_name, eff_hp, self.force_full_range)
+            if hasattr(self, "lbl_status"):
+                self.lbl_status.configure(text=f"Endpoint: {dev_name} → {mode_desc}", text_color=THEME["accent_gold"])
 
         self.apply_to_system_audio()
 

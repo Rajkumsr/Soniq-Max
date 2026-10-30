@@ -20,6 +20,7 @@ from audio_content import (
 )
 from constants import (
     APO_DEFAULT_PATH,
+    CONFIG_FILE,
     DEFAULT_PROFILES,
     SENSE_BROWSER_PROCESSES as BROWSER_PROCESSES,
     SENSE_LOCAL_MUSIC_PROCESSES,
@@ -338,6 +339,17 @@ class SoniqSenseDaemon:
                     )
             except Exception:
                 logger.warning("Could not identify output-device type; using speaker filters.", exc_info=True)
+
+        if not is_hp:
+            try:
+                import json
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                        cfg = json.load(f)
+                        if cfg.get("force_full_range"):
+                            is_hp = True
+            except Exception:
+                pass
 
         content = generate_apo_config(
             preset_name=profile["title"],
