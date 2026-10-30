@@ -231,6 +231,67 @@ class DaemonIntegrationTests(unittest.TestCase):
         self.assertEqual(daemon.current_profile, "audiophile_flat")
         install.assert_not_called()
 
+    def test_cinema_routing_preserves_music_when_active_and_switches_otherwise(self):
+        capture = FakeCapture()
+        classifier = FakeClassifier(
+            AudioAnalysis("cinema", 0.8, 0.1, "Dialogue / Ambient", 0.8)
+        )
+        app = ForegroundApp("chrome.exe", 50, 500)
+        daemon = SoniqSenseDaemon(
+            config_path=os.path.join(tempfile.gettempdir(), "config.txt"),
+            capture=capture,
+            classifier=classifier,
+            foreground_reader=lambda: app,
+            debounce=2,
+        )
+        daemon.current_profile = "bass_beast"
+        with patch("soniq_sense_daemon.install_apo_config") as install:
+            for _ in range(18):
+                daemon.run_iteration()
+
+        # Should preserve music profile
+        self.assertEqual(daemon.current_profile, "bass_beast")
+        install.assert_not_called()
+
+        # From cold/idle, cinema switches to cinema_dialogue (NOT voice_meeting)
+        daemon.current_profile = None
+        with patch("soniq_sense_daemon.install_apo_config") as install:
+            for _ in range(18):
+                daemon.run_iteration()
+
+        self.assertEqual(daemon.current_profile, "cinema_dialogue")
+        install.assert_called_once()
+
+    def test_speech_in_music_hysteresis_delays_switch_to_voice(self):
+        capture = FakeCapture()
+        classifier = FakeClassifier(
+            AudioAnalysis("speech", 0.9, 0.1, "Dialogue", 0.9)
+        )
+        app = ForegroundApp("chrome.exe", 60, 600)
+        daemon = SoniqSenseDaemon(
+            config_path=os.path.join(tempfile.gettempdir(), "config.txt"),
+            capture=capture,
+            classifier=classifier,
+            foreground_reader=lambda: app,
+            debounce=2,
+        )
+        daemon.current_profile = "bass_beast"
+        with patch("soniq_sense_daemon.install_apo_config") as install:
+            # 6 iterations (< 8 hysteresis threshold)
+            # note: each block is 4096 frames, analysis window is 48000 frames (hop 24000)
+            # so iterations yield classification results
+            for _ in range(18):
+                daemon.run_iteration()
+            # Still held on bass_beast due to hysteresis
+            self.assertEqual(daemon.current_profile, "bass_beast")
+            install.assert_not_called()
+
+            # Now run enough iterations to exceed hysteresis threshold
+            for _ in range(100):
+                daemon.run_iteration()
+            self.assertEqual(daemon.current_profile, "voice_meeting")
+            install.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

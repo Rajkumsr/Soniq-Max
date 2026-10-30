@@ -1,7 +1,7 @@
 import math
 import unittest
 
-from audio_content import LightweightDspClassifier, YamnetAudioClassifier, _classify_scores
+from audio_content import LightweightDspClassifier, _classify_scores
 
 
 class AudioContentAnalysisTests(unittest.TestCase):
@@ -64,6 +64,38 @@ class AudioContentAnalysisTests(unittest.TestCase):
 
         result = self.classifier.analyze(transient)
         self.assertEqual(result.category, "gaming")
+
+    def test_manali_trance_style_vocal_intro_classified_as_music(self):
+        sample_rate = 16000
+        # Breathy whisper vocal formants (1200, 1800 Hz) with atmospheric synth shimmer / air (6000, 7500 Hz)
+        # and zero sub-bass (typical of atmospheric vocal intros like Manali Trance)
+        vocal_intro = [
+            0.06 * math.sin(2 * math.pi * 1200 * i / sample_rate)
+            + 0.05 * math.sin(2 * math.pi * 1800 * i / sample_rate)
+            + 0.03 * math.sin(2 * math.pi * 6000 * i / sample_rate)
+            + 0.02 * math.sin(2 * math.pi * 7500 * i / sample_rate)
+            for i in range(sample_rate)
+        ]
+
+        result = self.classifier.analyze(vocal_intro)
+        self.assertEqual(result.category, "music")
+        self.assertGreaterEqual(result.category_score, 0.70)
+
+    def test_edm_snare_roll_classified_as_music(self):
+        sample_rate = 16000
+        # Sharp transient snare hits surrounded by high-frequency energy (snare sizzle / white noise)
+        snare_roll = [0.0] * 16000
+        for hit_start in (1000, 3000, 5000, 7000, 9000, 11000, 13000, 15000):
+            for i in range(200):
+                decay = math.exp(-i / 40.0)
+                snare_roll[hit_start + i] = decay * (
+                    0.5 * math.sin(2 * math.pi * 200 * i / sample_rate)
+                    + 0.4 * math.sin(2 * math.pi * 6000 * i / sample_rate)
+                )
+
+        result = self.classifier.analyze(snare_roll)
+        self.assertEqual(result.category, "music")
+        self.assertNotEqual(result.category, "gaming")
 
     def test_mono_and_stereo_audio_produce_consistent_results(self):
         sample_rate = 16000

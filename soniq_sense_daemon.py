@@ -239,6 +239,7 @@ class SoniqSenseDaemon:
         music_profile="bass_beast",
         speech_profile="voice_meeting",
         game_profile="fps_gaming",
+        cinema_profile="cinema_dialogue",
         foreground_reader=read_foreground_app,
         capture=None,
         classifier=None,
@@ -249,7 +250,8 @@ class SoniqSenseDaemon:
         self.music_profile = music_profile
         self.speech_profile = speech_profile
         self.game_profile = game_profile
-        for profile_key in (music_profile, speech_profile, game_profile):
+        self.cinema_profile = cinema_profile
+        for profile_key in (music_profile, speech_profile, game_profile, cinema_profile):
             if profile_key not in DEFAULT_PROFILES:
                 raise ValueError(f"Unknown built-in profile: {profile_key}")
 
@@ -258,6 +260,7 @@ class SoniqSenseDaemon:
         self.classifier = classifier
         self.consensus = ConsensusDebouncer(debounce)
         self.current_profile = None
+        self._speech_in_music_counter = 0
         self._audio_buffer = AudioBuffer()
         self._capture_retry_at = 0.0
         self._capture_retry_delay = 1.0
@@ -433,16 +436,31 @@ class SoniqSenseDaemon:
         elif result.category == "gaming":
             profile_key = self.game_profile
         elif result.category == "cinema":
-            profile_key = self.speech_profile
+            # If currently enjoying music, stick with music profile rather than switching down;
+            # otherwise, switch to the dedicated cinema profile.
+            if self.current_profile == self.music_profile:
+                profile_key = self.music_profile
+            else:
+                profile_key = self.cinema_profile
         else:
             self.consensus.observe(None)
             logger.debug(
-                "YAMNet content is %s (top event %s, score %.3f); holding current profile.",
+                "Content is %s (top event %s, score %.3f); holding current profile.",
                 result.category,
                 result.top_label,
                 result.top_score,
             )
             return
+
+        # Music Stickiness Hysteresis:
+        # Prevent brief vocal breakdowns, whispering intros, or short spoken interludes
+        # in songs (e.g. Manali Trance) from abruptly switching to meeting/voice profile.
+        if self.current_profile == self.music_profile and profile_key == self.speech_profile:
+            self._speech_in_music_counter = getattr(self, "_speech_in_music_counter", 0) + 1
+            if self._speech_in_music_counter < 8:
+                return
+        else:
+            self._speech_in_music_counter = 0
 
         if self.consensus.observe(profile_key):
             self._apply_profile(

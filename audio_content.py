@@ -227,11 +227,7 @@ class LightweightDspClassifier:
         peak = max(abs(s) for s in mono)
         crest = peak / (rms + 1e-9)
 
-        # 1. Impulsive transient spikes (Gunshots, explosions, impact cues)
-        if crest > 6.0:
-            return AudioAnalysis("gaming", min(1.0, crest / 10.0), rms, "Dynamic Impact", 0.90)
-
-        # 2. Spectral energy via 3 Biquad IIR filters
+        # Spectral energy via 3 Biquad IIR filters
         # Bass: 100 Hz bandpass (Q=0.7)
         bass_filter = BiquadFilter(100.0, 0.7, sample_rate, "bandpass")
         # Vocal: 1400 Hz bandpass (Q=0.55)
@@ -258,16 +254,24 @@ class LightweightDspClassifier:
         vocal_ratio = vocal_energy / total_power
         high_ratio = high_energy / total_power
 
-        # Speech: Pure vocal formants with low sub-bass (Podcasts, calls, dialogue)
-        if vocal_ratio > 0.40 and bass_ratio < 0.10:
+        # 1. Impulsive transient spikes (Gunshots, explosions, impact cues in games)
+        # Note: In gaming, gunshots occur against low ambient backgrounds with low spectral spread.
+        # In music (e.g. EDM snare rolls, builds), transients are surrounded by high-frequency synth/sparkle.
+        if crest > 7.5 and high_ratio < 0.10 and bass_ratio < 0.10:
+            return AudioAnalysis("gaming", min(1.0, crest / 10.0), rms, "Dynamic Impact", 0.90)
+
+        # 2. Pure human speech (Podcasts, meetings, calls)
+        # Real speech has vocal formants, but negligible sub-bass (< 80 Hz) AND negligible high-frequency air (> 4 kHz).
+        # Vocal songs (e.g., Manali Trance intro) have shimmering synth pads, breath air, and reverb tail (high_ratio >= 0.05).
+        if vocal_ratio > 0.40 and bass_ratio < 0.08 and high_ratio < 0.05:
             return AudioAnalysis("speech", min(1.0, vocal_ratio), rms, "Dialogue / Voice", vocal_ratio)
 
-        # Music: Sub-bass and high-frequency presence (Rhythmic beats, instruments, master tracks)
-        if bass_ratio >= 0.10 or high_ratio > 0.15:
-            score = min(1.0, max(bass_ratio * 2.5, 0.5))
+        # 3. Music: Sub-bass, electronic hi-hats/synths, or singing with atmospheric air
+        if bass_ratio >= 0.08 or high_ratio >= 0.10 or (vocal_ratio > 0.35 and high_ratio >= 0.05):
+            score = min(1.0, max((bass_ratio + high_ratio) * 2.0, 0.70))
             return AudioAnalysis("music", score, rms, "Music / Audio Track", score)
 
-        # Cinema: Cinematic balance (Dialogue + background score/ambience)
+        # 4. Cinema: Cinematic balance (Dialogue + background score/ambience)
         return AudioAnalysis("cinema", max(0.5, vocal_ratio), rms, "Cinema / Media", max(0.5, vocal_ratio))
 
 
