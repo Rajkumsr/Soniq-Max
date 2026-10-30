@@ -400,7 +400,7 @@ def stagger_cascade_entrance(parent_widget, cards, step_delay_ms=22, on_complete
             on_complete()
         return
 
-    for idx, card in enumerate(cards):
+    for card in cards:
         if hasattr(card, "winfo_exists") and card.winfo_exists():
             # If using pack, temporarily unpack and cascade pack
             try:

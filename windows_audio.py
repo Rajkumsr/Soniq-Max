@@ -6,7 +6,7 @@ and heuristic app/window classification.
 import ctypes
 import logging
 import time
-from ctypes import wintypes, c_float, c_uint32, POINTER
+from ctypes import wintypes, POINTER
 import psutil
 
 from constants import (

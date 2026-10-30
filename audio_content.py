@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 import logging
 import math
-import os
 import threading
 
 logger = logging.getLogger(__name__)

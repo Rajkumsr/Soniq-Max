@@ -21,10 +21,6 @@ class GlobalHotkeyManager:
         self.callback_dispatcher = callback_dispatcher
         self.registered_hotkeys = {}
 
-    def set_dispatcher(self, dispatcher):
-        """Sets function to dispatch actions: dispatcher(action_name, *args)."""
-        self.callback_dispatcher = dispatcher
-
     def start(self):
         """Starts background hotkey listening thread."""
         if self._thread and self._thread.is_alive():

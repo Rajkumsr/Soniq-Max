@@ -28,7 +28,7 @@ import psutil
 
 from audio_content import AudioContentMonitor
 from constants import (
-    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, APO_VST_DIR, LOCAL_VST_PLUGIN_PATH,
+    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, LOCAL_VST_PLUGIN_PATH,
     DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES, get_asset_dir,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
@@ -413,13 +413,10 @@ class SoniqDesktopApp(ctk.CTk):
         self.dev_dot.pack(side="left", padx=(10, 4), pady=3)
 
         if self.force_full_range:
-            dev_icon = "⚡"
             dev_text = "⚡ Creative / Ext (Full Bass)"
         elif self.is_headphone:
-            dev_icon = "🎧"
             dev_text = f"🎧 {self.current_device_name[:24]}"
         else:
-            dev_icon = "🔊"
             dev_text = f"🔊 {self.current_device_name[:24]}"
 
         self.dev_lbl = ctk.CTkLabel(
@@ -970,17 +967,14 @@ class SoniqDesktopApp(ctk.CTk):
             self.audio_content_monitor.reconnect()
 
         if self.force_full_range:
-            device_icon = "⚡"
             mode_desc = "External 4.1 / Subwoofer (Full 20Hz Sub-Bass)"
             pill_text = "⚡ Creative / Ext (Full Bass)"
             dot_color = THEME["accent_green"]
         elif is_hp:
-            device_icon = "🎧"
             mode_desc = "Headphones (Full 20Hz Sub-Bass)"
             pill_text = f"🎧 {dev_name[:22]}"
             dot_color = THEME["accent_green"]
         else:
-            device_icon = "🔊"
             mode_desc = "Laptop Speakers (Anti-Rattle 120Hz)"
             pill_text = f"🔊 {dev_name[:24]}"
             dot_color = THEME["accent_gold"]
