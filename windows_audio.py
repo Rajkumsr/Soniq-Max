@@ -324,7 +324,7 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
             return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
 
         # 5. Unclassified browser media (including generic YouTube streams without keywords)
-        # Return None, None so the YAMNet AI loopback classifier analyzes actual audio waveforms!
+        # Return None, None so the DSP loopback classifier analyzes actual audio waveforms!
         return None, None
 
     # 2. Dedicated Game Platform, Engine & Game Title Keywords

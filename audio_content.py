@@ -10,8 +10,8 @@ SAMPLE_RATE = 16000
 ANALYSIS_FRAMES = SAMPLE_RATE
 SILENCE_RMS = 0.002
 LOOPBACK_SAMPLE_RATE = 48000
-YAMNET_DECIMATION = LOOPBACK_SAMPLE_RATE // SAMPLE_RATE
-LOOPBACK_ANALYSIS_FRAMES = ANALYSIS_FRAMES * YAMNET_DECIMATION
+DECIMATION_FACTOR = LOOPBACK_SAMPLE_RATE // SAMPLE_RATE
+LOOPBACK_ANALYSIS_FRAMES = ANALYSIS_FRAMES * DECIMATION_FACTOR
 
 
 class AudioBuffer(list):
@@ -109,7 +109,7 @@ def downsample_48k_stereo_to_16k_mono(samples):
     f2 = BiquadFilter(5500.0, 0.707, LOOPBACK_SAMPLE_RATE, "lowpass")
 
     out = []
-    step = YAMNET_DECIMATION
+    step = DECIMATION_FACTOR
     for i, s in enumerate(samples):
         l, r = float(s[0]), float(s[1])
         x = 0.0 if not (math.isfinite(l) and math.isfinite(r)) else (l + r) * 0.5
@@ -274,8 +274,8 @@ class LightweightDspClassifier:
         return AudioAnalysis("cinema", max(0.5, vocal_ratio), rms, "Cinema / Media", max(0.5, vocal_ratio))
 
 
-# Seamless alias for backwards compatibility
-YamnetAudioClassifier = LightweightDspClassifier
+
+
 
 
 class AudioContentMonitor:

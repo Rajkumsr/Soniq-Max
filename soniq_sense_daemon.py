@@ -15,7 +15,7 @@ from audio_content import (
     AudioBuffer,
     LOOPBACK_SAMPLE_RATE,
     SAMPLE_RATE,
-    YamnetAudioClassifier,
+    LightweightDspClassifier,
     downsample_48k_stereo_to_16k_mono,
 )
 from constants import (
@@ -302,8 +302,8 @@ class SoniqSenseDaemon:
 
     def _ensure_classifier(self):
         if self.classifier is None:
-            logger.info("Loading offline YAMNet classifier on CPU.")
-            self.classifier = YamnetAudioClassifier()
+            logger.info("Loading offline DSP acoustic classifier.")
+            self.classifier = LightweightDspClassifier()
 
     def _close_capture(self):
         try:
@@ -489,7 +489,7 @@ class SoniqSenseDaemon:
             self.config_path,
         )
         logger.info(
-            "Fast app decisions skip audio capture, resampling, and YAMNet inference. "
+            "Fast app decisions skip audio capture, resampling, and DSP acoustic inference. "
             "Browser classification requests 48 kHz stereo float32 loopback and "
             "creates a separate 16 kHz mono model copy."
         )

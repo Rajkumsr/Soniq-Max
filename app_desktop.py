@@ -1195,7 +1195,7 @@ class SoniqDesktopApp(ctk.CTk):
                     elif bg_target:
                         chosen_target = self.sense_profile_for_detected_target(bg_target)
 
-                # Priority 4: AI Loopback Content Classifier (YAMNet unclassified streams)
+                # Priority 4: DSP Loopback Content Classifier (unclassified audio streams)
                 elif content_target:
                     chosen_target = content_target
 
