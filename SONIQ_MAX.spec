@@ -71,13 +71,3 @@ coll = COLLECT(
     name='SONIQ_MAX',
 )
 
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='SONIQ_MAX',
-)
-
