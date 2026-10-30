@@ -1,0 +1,13 @@
+{
+  "active_profile": "laptop_lifesaver",
+  "is_enhanced": true,
+  "night_mode": false,
+  "auto_app_enabled": true,
+  "force_full_range": false,
+  "sense_profile_assignments": {
+    "gaming": "fps_gaming",
+    "music": "bass_beast",
+    "speech": "cinema_dialogue",
+    "other": "laptop_lifesaver"
+  }
+}

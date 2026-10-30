@@ -12,6 +12,7 @@ Modular Architecture:
 - export_system_apo.py: System-wide Equalizer APO generator
 """
 import os
+import re
 import sys
 import json
 import time
@@ -23,11 +24,12 @@ from logging.handlers import RotatingFileHandler
 import winreg
 import ctypes
 import customtkinter as ctk
+import psutil
 
 from audio_content import AudioContentMonitor
 from constants import (
     THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, APO_VST_DIR, LOCAL_VST_PLUGIN_PATH,
-    DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES,
+    DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES, get_asset_dir,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
 )
