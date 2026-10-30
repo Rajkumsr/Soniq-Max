@@ -4,6 +4,7 @@ Equalizer APO configuration generation and safe SONIQ MAX installation.
 SONIQ MAX writes its filters to a separate managed file and includes that file
 from Equalizer APO's main config, preserving existing user configuration.
 """
+import cmath
 import math
 import os
 import re
@@ -12,7 +13,7 @@ import threading
 import time
 from contextlib import contextmanager
 
-import numpy as np
+
 
 from constants import validate_profile_data
 
@@ -30,9 +31,24 @@ def _validate_number(name, value, minimum, maximum):
         raise ValueError(f"{name} must be between {minimum} and {maximum}.")
 
 
+def _calc_response_magnitude(frequencies, sample_rate, b0, b1, b2, a0, a1, a2):
+    if isinstance(frequencies, (int, float)):
+        omega_f = 2.0 * math.pi * frequencies / sample_rate
+        z1 = cmath.rect(1.0, -omega_f)
+        z2 = z1 * z1
+        return abs((b0 + b1 * z1 + b2 * z2) / (a0 + a1 * z1 + a2 * z2))
+    mags = []
+    for f in frequencies:
+        omega_f = 2.0 * math.pi * f / sample_rate
+        z1 = cmath.rect(1.0, -omega_f)
+        z2 = z1 * z1
+        mags.append(abs((b0 + b1 * z1 + b2 * z2) / (a0 + a1 * z1 + a2 * z2)))
+    return mags
+
+
 def _response_magnitude(frequencies, sample_rate, frequency, gain_db, q, filter_type):
     amplitude = 10.0 ** (gain_db / 40.0)
-    omega = 2.0 * np.pi * frequency / sample_rate
+    omega = 2.0 * math.pi * frequency / sample_rate
     cosine = math.cos(omega)
     sine = math.sin(omega)
     if filter_type == "peak":
@@ -64,11 +80,16 @@ def _response_magnitude(frequencies, sample_rate, frequency, gain_db, q, filter_
     else:
         raise ValueError(f"Unsupported filter response type: {filter_type}")
 
-    z1 = np.exp(-1j * 2.0 * np.pi * frequencies / sample_rate)
-    z2 = z1 * z1
-    numerator = b0 + b1 * z1 + b2 * z2
-    denominator = a0 + a1 * z1 + a2 * z2
-    return np.abs(numerator / denominator)
+    # Pure python biquad response calculation
+
+
+
+    return _calc_response_magnitude(frequencies, sample_rate, b0, b1, b2, a0, a1, a2)
+
+
+def _apply_response_mags(response, mags):
+    for i, m in enumerate(mags):
+        response[i] *= m
 
 
 def estimate_peak_filter_gain_db(eq_gains, bass_boost, clarity, spatial_width, is_headphone=False):
@@ -85,37 +106,39 @@ def estimate_peak_filter_gain_db(eq_gains, bass_boost, clarity, spatial_width, i
 
     peak_gain_db = 0.0
     for sample_rate in (44100, 48000, 96000):
-        frequencies = np.geomspace(20.0, min(20000.0, sample_rate * 0.45), 768)
-        response = np.ones(frequencies.shape, dtype=np.complex128)
+        max_f = min(20000.0, sample_rate * 0.45)
+        log_ratio = math.log(max_f / 20.0) / 767.0
+        frequencies = [20.0 * math.exp(i * log_ratio) for i in range(768)]
+        response = [1.0] * 768
         for frequency, gain in zip(EQ_FREQUENCIES, eq_gains):
             if abs(gain) > 0.1:
-                response *= _response_magnitude(
+                _apply_response_mags(response, _response_magnitude(
                     frequencies, sample_rate, frequency, gain, 1.41, "peak"
-                )
+                ))
 
         if bass_boost > 0.01:
             bass_gain = bass_boost * 6.0
-            response *= _response_magnitude(
+            _apply_response_mags(response, _response_magnitude(
                 frequencies, sample_rate, 150.0, bass_gain, 1.2, "peak"
-            )
-            response *= _response_magnitude(
+            ))
+            _apply_response_mags(response, _response_magnitude(
                 frequencies, sample_rate, 200.0, bass_gain * 0.6, 1.0, "low_shelf"
-            )
+            ))
 
         if clarity > 0.01:
             clarity_gain = clarity * 4.5
-            response *= _response_magnitude(
+            _apply_response_mags(response, _response_magnitude(
                 frequencies, sample_rate, 2800.0, clarity_gain, 1.5, "peak"
-            )
-            response *= _response_magnitude(
+            ))
+            _apply_response_mags(response, _response_magnitude(
                 frequencies, sample_rate, 7000.0, clarity_gain * 0.7, 1.0, "high_shelf"
-            )
+            ))
             if not is_headphone:
-                response *= _response_magnitude(
+                _apply_response_mags(response, _response_magnitude(
                     frequencies, sample_rate, 320.0, -2.5, 2.0, "peak"
-                )
+                ))
 
-        max_magnitude = max(1.0, float(np.max(np.abs(response))))
+        max_magnitude = max(1.0, max(response))
         peak_gain_db = max(peak_gain_db, 20.0 * math.log10(max_magnitude))
 
     cross_gain = 0.0

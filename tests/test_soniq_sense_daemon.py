@@ -1,12 +1,11 @@
+import math
 import os
 import tempfile
 import unittest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, Mock, patch
 
-import numpy as np
-
-from audio_content import AudioAnalysis, downsample_48k_stereo_to_16k_mono
+from audio_content import AudioAnalysis, AudioBuffer, downsample_48k_stereo_to_16k_mono
 from soniq_sense_daemon import (
     BROWSER_PROCESSES,
     CAPTURE_ANALYSIS_FRAMES,
@@ -33,7 +32,7 @@ class FakeCapture:
         self.open_count += 1
 
     def read_block(self):
-        return np.zeros((CAPTURE_BLOCK_FRAMES, 2), dtype=np.float32)
+        return AudioBuffer([[0.0, 0.0] for _ in range(CAPTURE_BLOCK_FRAMES)])
 
     def default_device_changed(self):
         return False
@@ -57,29 +56,28 @@ class FakeClassifier:
 class ResamplingTests(unittest.TestCase):
     def test_downsample_preserves_duration_and_mono_output(self):
         sample_rate = 48000
-        frames = np.arange(sample_rate, dtype=np.float32)
-        tone = 0.25 * np.sin(2 * np.pi * 1000 * frames / sample_rate)
-        stereo = np.column_stack((tone, tone))
+        tone = [0.25 * math.sin(2 * math.pi * 1000 * i / sample_rate) for i in range(sample_rate)]
+        stereo = AudioBuffer([[t, t] for t in tone])
 
         result = downsample_48k_stereo_to_16k_mono(stereo)
 
         self.assertEqual(result.shape, (16000,))
-        self.assertAlmostEqual(float(np.sqrt(np.mean(result[500:-500] ** 2))), 0.25 / np.sqrt(2), delta=0.01)
+        rms = math.sqrt(sum(x * x for x in result[500:-500]) / len(result[500:-500]))
+        self.assertAlmostEqual(rms, 0.25 / math.sqrt(2), delta=0.01)
 
     def test_downsample_rejects_out_of_band_audio_before_decimation(self):
         sample_rate = 48000
-        frames = np.arange(sample_rate, dtype=np.float32)
-        high_tone = 0.5 * np.sin(2 * np.pi * 12000 * frames / sample_rate)
-        stereo = np.column_stack((high_tone, high_tone))
+        high_tone = [0.5 * math.sin(2 * math.pi * 12000 * i / sample_rate) for i in range(sample_rate)]
+        stereo = AudioBuffer([[t, t] for t in high_tone])
 
         result = downsample_48k_stereo_to_16k_mono(stereo)
-        aliased_rms = float(np.sqrt(np.mean(result[500:-500] ** 2)))
+        aliased_rms = math.sqrt(sum(x * x for x in result[500:-500]) / len(result[500:-500]))
 
         self.assertLess(aliased_rms, 0.01)
 
     def test_downsample_requires_stereo_frame_matrix(self):
         with self.assertRaisesRegex(ValueError, "two-channels"):
-            downsample_48k_stereo_to_16k_mono(np.zeros(48000, dtype=np.float32))
+            downsample_48k_stereo_to_16k_mono([0.0] * 48000)
 
 
 class WasapiCaptureTests(unittest.TestCase):
@@ -93,8 +91,8 @@ class WasapiCaptureTests(unittest.TestCase):
                 )
                 recorder = MagicMock()
                 recorder.__enter__.return_value = recorder
-                recorder.record.return_value = np.zeros(
-                    (CAPTURE_BLOCK_FRAMES, 2), dtype=np.float32
+                recorder.record.return_value = AudioBuffer(
+                    [[0.0, 0.0] for _ in range(CAPTURE_BLOCK_FRAMES)]
                 )
                 soundcard = Mock()
                 soundcard.default_speaker.return_value = speaker

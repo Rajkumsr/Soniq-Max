@@ -1,10 +1,9 @@
 """Local real-time acoustic DSP analyzer and Windows playback-loopback capture."""
 from dataclasses import dataclass
 import logging
+import math
 import os
 import threading
-
-import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +15,28 @@ YAMNET_DECIMATION = LOOPBACK_SAMPLE_RATE // SAMPLE_RATE
 LOOPBACK_ANALYSIS_FRAMES = ANALYSIS_FRAMES * YAMNET_DECIMATION
 
 
+class AudioBuffer(list):
+    """Featherweight list subclass providing shape metadata for duck-typing compatibility."""
+
+    @property
+    def shape(self):
+        if len(self) > 0 and isinstance(self[0], (list, tuple)):
+            return (len(self), len(self[0]))
+        return (len(self),)
+
+    def copy(self):
+        return AudioBuffer(self)
+
+    def __getitem__(self, item):
+        val = super().__getitem__(item)
+        if isinstance(item, slice):
+            return AudioBuffer(val)
+        return val
+
+    def __pow__(self, power):
+        return AudioBuffer([x ** power for x in self])
+
+
 @dataclass(frozen=True)
 class AudioAnalysis:
     category: str
@@ -25,40 +46,102 @@ class AudioAnalysis:
     top_score: float
 
 
-def downsample_48k_stereo_to_16k_mono(samples):
-    """Anti-alias and downsample 48 kHz float loopback to mono 16 kHz."""
-    audio = np.asarray(samples, dtype=np.float32)
-    if audio.ndim != 2 or audio.shape[1] != 2:
-        raise ValueError("Loopback input must be a frames-by-two-channels array.")
-    if audio.shape[0] == 0:
-        return np.empty(0, dtype=np.float32)
-    if not np.isfinite(audio).all():
-        audio = np.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0)
+class BiquadFilter:
+    """Standard 2nd-order Audio EQ Cookbook biquad filter for real-time DSP."""
 
-    mono = audio.mean(axis=1, dtype=np.float64)
-    taps_count = 127
-    centered = np.arange(taps_count, dtype=np.float64) - (taps_count - 1) / 2
-    cutoff = 7200.0 / LOOPBACK_SAMPLE_RATE
-    taps = 2.0 * cutoff * np.sinc(2.0 * cutoff * centered)
-    taps *= np.hamming(taps_count)
-    taps /= taps.sum()
-    filtered = np.convolve(mono, taps, mode="same")
-    return filtered[::YAMNET_DECIMATION].astype(np.float32)
+    def __init__(self, cutoff, q, sample_rate, filter_type="lowpass"):
+        omega = 2.0 * math.pi * cutoff / sample_rate
+        sn = math.sin(omega)
+        cs = math.cos(omega)
+        alpha = sn / (2.0 * q)
+        a0 = 1.0 + alpha
+        if filter_type == "lowpass":
+            self.b0 = ((1.0 - cs) / 2.0) / a0
+            self.b1 = (1.0 - cs) / a0
+            self.b2 = ((1.0 - cs) / 2.0) / a0
+        elif filter_type == "bandpass":
+            self.b0 = alpha / a0
+            self.b1 = 0.0
+            self.b2 = -alpha / a0
+        elif filter_type == "highpass":
+            self.b0 = ((1.0 + cs) / 2.0) / a0
+            self.b1 = -(1.0 + cs) / a0
+            self.b2 = ((1.0 + cs) / 2.0) / a0
+        else:
+            raise ValueError(f"Unsupported filter type: {filter_type}")
+        self.a1 = (-2.0 * cs) / a0
+        self.a2 = (1.0 - alpha) / a0
+        self.x1 = self.x2 = self.y1 = self.y2 = 0.0
+
+    def process(self, in_sample):
+        out = (
+            self.b0 * in_sample
+            + self.b1 * self.x1
+            + self.b2 * self.x2
+            - self.a1 * self.y1
+            - self.a2 * self.y2
+        )
+        self.x2 = self.x1
+        self.x1 = in_sample
+        self.y2 = self.y1
+        self.y1 = out
+        return out
+
+
+def downsample_48k_stereo_to_16k_mono(samples):
+    """Anti-alias and downsample 48 kHz stereo to mono 16 kHz without FIR convolution overhead."""
+    if hasattr(samples, "tolist"):
+        samples = samples.tolist()
+
+    if hasattr(samples, "shape"):
+        shape = samples.shape
+        if len(shape) != 2 or shape[1] != 2:
+            raise ValueError("Loopback input must be a frames-by-two-channels array.")
+    elif isinstance(samples, (list, tuple)):
+        if len(samples) > 0 and (not isinstance(samples[0], (list, tuple)) or len(samples[0]) != 2):
+            raise ValueError("Loopback input must be a frames-by-two-channels array.")
+    else:
+        raise ValueError("Loopback input must be a frames-by-two-channels array.")
+
+    if not samples or len(samples) == 0:
+        return AudioBuffer()
+
+    f1 = BiquadFilter(5500.0, 0.707, LOOPBACK_SAMPLE_RATE, "lowpass")
+    f2 = BiquadFilter(5500.0, 0.707, LOOPBACK_SAMPLE_RATE, "lowpass")
+
+    out = []
+    step = YAMNET_DECIMATION
+    for i, s in enumerate(samples):
+        l, r = float(s[0]), float(s[1])
+        x = 0.0 if not (math.isfinite(l) and math.isfinite(r)) else (l + r) * 0.5
+        y = f2.process(f1.process(x))
+        if i % step == 0:
+            out.append(y)
+
+    return AudioBuffer(out)
 
 
 def _classify_scores(scores, labels, rms, category_map=None):
     """Backwards-compatible helper for scoring unit tests."""
-    score_matrix = np.asarray(scores, dtype=np.float32)
-    if score_matrix.ndim == 1:
-        mean_scores = score_matrix
-    elif score_matrix.ndim == 2 and score_matrix.shape[0] > 0:
-        mean_scores = score_matrix.mean(axis=0)
-    else:
+    if hasattr(scores, "tolist"):
+        scores = scores.tolist()
+    if not scores:
         raise ValueError("Scores must be a non-empty vector or matrix.")
-    if mean_scores.size != len(labels) or not np.isfinite(mean_scores).all():
+
+    if isinstance(scores[0], (list, tuple)):
+        num_rows = len(scores)
+        num_cols = len(scores[0])
+        mean_scores = [
+            sum(scores[r][c] for r in range(num_rows)) / num_rows
+            for c in range(num_cols)
+        ]
+    else:
+        mean_scores = [float(s) for s in scores]
+
+    if len(mean_scores) != len(labels) or not all(math.isfinite(s) for s in mean_scores):
         raise ValueError("Scores do not match labels.")
 
-    top_index = int(np.argmax(mean_scores))
+    top_index = max(range(len(mean_scores)), key=lambda i: mean_scores[i])
     top_label = labels[top_index]
     top_score = float(mean_scores[top_index])
 
@@ -81,8 +164,8 @@ def _classify_scores(scores, labels, rms, category_map=None):
     norm = [l.casefold() for l in labels]
     speech_indices = [i for i, l in enumerate(norm) if "speech" in l or "voice" in l]
     music_indices = [i for i, l in enumerate(norm) if "music" in l or "song" in l]
-    s_score = float(mean_scores[speech_indices].max()) if speech_indices else 0.0
-    m_score = float(mean_scores[music_indices].max()) if music_indices else 0.0
+    s_score = max([mean_scores[i] for i in speech_indices], default=0.0)
+    m_score = max([mean_scores[i] for i in music_indices], default=0.0)
 
     if s_score >= 0.20 and s_score > m_score:
         return AudioAnalysis("speech", s_score, rms, top_label, top_score)
@@ -95,7 +178,7 @@ class LightweightDspClassifier:
     """
     Ultra-lightweight real-time acoustic DSP classifier.
     Computes spectral energy distribution, sub-bass ratio, vocal formant presence,
-    and crest factor in < 0.1ms with 0.0% CPU overhead. Zero external neural network dependencies.
+    and crest factor in pure Python with zero external C-dependencies.
     """
 
     def __init__(self, *args, **kwargs):
@@ -104,54 +187,87 @@ class LightweightDspClassifier:
     def analyze(self, samples, sample_rate=SAMPLE_RATE):
         if sample_rate != SAMPLE_RATE:
             raise ValueError(f"Classifier requires {SAMPLE_RATE} Hz audio.")
-        audio = np.asarray(samples, dtype=np.float32)
-        if audio.size == 0:
+
+        if hasattr(samples, "tolist"):
+            samples = samples.tolist()
+
+        if not samples or len(samples) == 0:
             return AudioAnalysis("silence", 1.0, 0.0, "Silence", 1.0)
-        if audio.ndim > 1:
-            if audio.ndim != 2:
+
+        # Handle 2D / Stereo
+        if isinstance(samples[0], (list, tuple)):
+            if len(samples[0]) != 2:
                 raise ValueError("Audio must be mono or a frames-by-channels array.")
-            audio = audio.mean(axis=1)
-        audio = audio.reshape(-1)
-        audio = np.nan_to_num(audio, nan=0.0, posinf=0.0, neginf=0.0)
-        audio = np.clip(audio, -1.0, 1.0)
-        rms = float(np.sqrt(np.mean(np.square(audio))))
+            mono = [(float(s[0]) + float(s[1])) * 0.5 for s in samples]
+        else:
+            mono = [float(s) for s in samples]
+
+        # Sanitize non-finite values and clip
+        cleaned = []
+        for s in mono:
+            if not math.isfinite(s):
+                cleaned.append(0.0)
+            elif s > 1.0:
+                cleaned.append(1.0)
+            elif s < -1.0:
+                cleaned.append(-1.0)
+            else:
+                cleaned.append(s)
+        mono = cleaned
+
+        n = len(mono)
+        if n == 0:
+            return AudioAnalysis("silence", 1.0, 0.0, "Silence", 1.0)
+
+        sum_sq = sum(s * s for s in mono)
+        rms = math.sqrt(sum_sq / n)
         if rms < SILENCE_RMS:
             return AudioAnalysis("silence", 1.0, rms, "Silence", 1.0)
 
-        peak = float(np.max(np.abs(audio)))
+        peak = max(abs(s) for s in mono)
         crest = peak / (rms + 1e-9)
-
-        # Real FFT Power Spectral Density
-        n = len(audio)
-        window = np.hanning(n)
-        spectrum = np.abs(np.fft.rfft(audio * window))
-        freqs = np.fft.rfftfreq(n, d=1.0 / sample_rate)
-
-        power = spectrum ** 2
-        total_power = np.sum(power) + 1e-12
-
-        bass_mask = (freqs >= 30) & (freqs < 180)
-        vocal_mask = (freqs >= 300) & (freqs < 3400)
-        high_mask = (freqs >= 4000)
-
-        bass_ratio = float(np.sum(power[bass_mask]) / total_power)
-        vocal_ratio = float(np.sum(power[vocal_mask]) / total_power)
-        high_ratio = float(np.sum(power[high_mask]) / total_power)
 
         # 1. Impulsive transient spikes (Gunshots, explosions, impact cues)
         if crest > 6.0:
             return AudioAnalysis("gaming", min(1.0, crest / 10.0), rms, "Dynamic Impact", 0.90)
 
-        # 2. Pure vocal formants with low sub-bass (Podcasts, calls, dialogue)
-        if vocal_ratio > 0.65 and bass_ratio < 0.07:
+        # 2. Spectral energy via 3 Biquad IIR filters
+        # Bass: 100 Hz bandpass (Q=0.7)
+        bass_filter = BiquadFilter(100.0, 0.7, sample_rate, "bandpass")
+        # Vocal: 1400 Hz bandpass (Q=0.55)
+        vocal_filter = BiquadFilter(1400.0, 0.55, sample_rate, "bandpass")
+        # High: 5000 Hz highpass (Q=0.7)
+        high_filter = BiquadFilter(5000.0, 0.7, sample_rate, "highpass")
+
+        bass_energy = 0.0
+        vocal_energy = 0.0
+        high_energy = 0.0
+
+        for x in mono:
+            by = bass_filter.process(x)
+            bass_energy += by * by
+
+            vy = vocal_filter.process(x)
+            vocal_energy += vy * vy
+
+            hy = high_filter.process(x)
+            high_energy += hy * hy
+
+        total_power = sum_sq + 1e-12
+        bass_ratio = bass_energy / total_power
+        vocal_ratio = vocal_energy / total_power
+        high_ratio = high_energy / total_power
+
+        # Speech: Pure vocal formants with low sub-bass (Podcasts, calls, dialogue)
+        if vocal_ratio > 0.40 and bass_ratio < 0.10:
             return AudioAnalysis("speech", min(1.0, vocal_ratio), rms, "Dialogue / Voice", vocal_ratio)
 
-        # 3. Sub-bass and high-frequency presence (Rhythmic beats, instruments, master tracks)
+        # Music: Sub-bass and high-frequency presence (Rhythmic beats, instruments, master tracks)
         if bass_ratio >= 0.10 or high_ratio > 0.15:
             score = min(1.0, max(bass_ratio * 2.5, 0.5))
             return AudioAnalysis("music", score, rms, "Music / Audio Track", score)
 
-        # 4. Cinematic balance (Dialogue + background score/ambience)
+        # Cinema: Cinematic balance (Dialogue + background score/ambience)
         return AudioAnalysis("cinema", max(0.5, vocal_ratio), rms, "Cinema / Media", max(0.5, vocal_ratio))
 
 

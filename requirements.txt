@@ -4,5 +4,4 @@ Pillow
 pystray
 pycaw
 comtypes
-numpy
 soundcard

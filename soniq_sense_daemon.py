@@ -10,10 +10,9 @@ import signal
 import threading
 import time
 
-import numpy as np
-
 from audio_content import (
     ANALYSIS_FRAMES,
+    AudioBuffer,
     LOOPBACK_SAMPLE_RATE,
     SAMPLE_RATE,
     YamnetAudioClassifier,
@@ -178,12 +177,13 @@ class WasapiLoopbackCapture:
         if self.recorder is None:
             raise RuntimeError("Loopback capture is not open.")
         samples = self.recorder.record(numframes=CAPTURE_BLOCK_FRAMES)
-        if samples.ndim != 2 or samples.shape != (CAPTURE_BLOCK_FRAMES, 2):
+        shape = samples.shape if hasattr(samples, "shape") else ((len(samples), len(samples[0])) if samples and isinstance(samples[0], (list, tuple)) else ())
+        if shape != (CAPTURE_BLOCK_FRAMES, 2):
             raise RuntimeError(
                 f"Expected a {CAPTURE_BLOCK_FRAMES}-frame stereo block; "
-                f"received shape {samples.shape}."
+                f"received shape {shape}."
             )
-        return np.asarray(samples, dtype=np.float32)
+        return AudioBuffer(samples.tolist() if hasattr(samples, "tolist") else samples)
 
     def default_device_changed(self):
         if self.device_hint or self.speaker is None:
@@ -258,7 +258,7 @@ class SoniqSenseDaemon:
         self.classifier = classifier
         self.consensus = ConsensusDebouncer(debounce)
         self.current_profile = None
-        self._audio_buffer = np.empty((0, 2), dtype=np.float32)
+        self._audio_buffer = AudioBuffer()
         self._capture_retry_at = 0.0
         self._capture_retry_delay = 1.0
         self._next_device_check = 0.0
@@ -306,7 +306,7 @@ class SoniqSenseDaemon:
             self.capture.close()
         except Exception:
             logger.exception("Could not close the WASAPI loopback stream")
-        self._audio_buffer = np.empty((0, 2), dtype=np.float32)
+        self._audio_buffer = AudioBuffer()
         self._next_device_check = 0.0
 
     def _suspend_browser_analysis(self):
@@ -377,7 +377,7 @@ class SoniqSenseDaemon:
                 self._capture_retry_delay = 1.0
                 self._next_device_check = now + 1.0
             block = self.capture.read_block()
-            self._audio_buffer = np.concatenate((self._audio_buffer, block), axis=0)
+            self._audio_buffer.extend(block.tolist() if hasattr(block, "tolist") else block)
 
             if now >= self._next_device_check:
                 self._next_device_check = now + 1.0
@@ -387,11 +387,11 @@ class SoniqSenseDaemon:
                     self._capture_retry_at = now
                     return None
 
-            if self._audio_buffer.shape[0] < CAPTURE_ANALYSIS_FRAMES:
+            if len(self._audio_buffer) < CAPTURE_ANALYSIS_FRAMES:
                 return None
 
-            analysis_samples = self._audio_buffer[:CAPTURE_ANALYSIS_FRAMES]
-            self._audio_buffer = self._audio_buffer[ANALYSIS_HOP_FRAMES:]
+            analysis_samples = AudioBuffer(self._audio_buffer[:CAPTURE_ANALYSIS_FRAMES])
+            self._audio_buffer = AudioBuffer(self._audio_buffer[ANALYSIS_HOP_FRAMES:])
             model_samples = downsample_48k_stereo_to_16k_mono(analysis_samples)
             if model_samples.shape[0] != SAMPLE_RATE:
                 raise RuntimeError(
