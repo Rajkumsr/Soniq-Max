@@ -161,10 +161,6 @@ class SoniqDesktopApp(ctk.CTk):
         self.is_headphone = False
         self.force_full_range = False
 
-    @property
-    def effective_is_headphone(self):
-        return self.is_headphone or getattr(self, "force_full_range", False)
-
         # Initialize Background Services
         self.hotkey_service = GlobalHotkeyManager(self.on_hotkey_triggered)
         self.tray_service = SystemTrayService({
@@ -209,6 +205,10 @@ class SoniqDesktopApp(ctk.CTk):
                 ctypes.windll.psapi.EmptyWorkingSet(ctypes.windll.kernel32.GetCurrentProcess())
             except Exception:
                 pass
+
+    @property
+    def effective_is_headphone(self):
+        return self.is_headphone or getattr(self, "force_full_range", False)
 
     # =========================================================================
     # Persistence & Profiles
