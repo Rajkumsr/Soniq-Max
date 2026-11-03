@@ -1,12 +1,14 @@
 """
 SONIQ MAX PRO — Settings Tab View Component.
-Displays Equalizer APO driver integration status, collapsible global system hotkeys accordion,
-collapsible driver diagnostics & overrides, Windows startup toggle, and application info.
+Unified System Audio Pipeline Engine selector (Direct Soniq Engine vs Equalizer APO),
+native VST engine controls, global system hotkeys, diagnostics, Windows startup toggle,
+and application info with zero duplication.
 """
 import os
 import customtkinter as ctk
 from constants import THEME, APO_DEFAULT_PATH
 from ui.fluent_effects import CollapsibleSection, FluentTooltip, stagger_cascade_entrance
+
 
 class SettingsTab(ctk.CTkFrame):
     def __init__(self, parent, controller):
@@ -19,34 +21,154 @@ class SettingsTab(ctk.CTkFrame):
         self.container = ctk.CTkScrollableFrame(self, fg_color="transparent")
         self.container.pack(fill="both", expand=True, padx=4, pady=4)
 
-        # Card 1: Equalizer APO System Audio Driver
-        self.c_apo = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
-        self.c_apo.pack(fill="x", pady=6)
+        # Card 1: Unified System Audio Pipeline Engine & VST DSP
+        self.c_engine = ctk.CTkFrame(
+            self.container, fg_color=THEME["card_bg"],
+            corner_radius=12, border_width=1, border_color=THEME["card_border"]
+        )
+        self.c_engine.pack(fill="x", pady=6)
 
-        apo_top = ctk.CTkFrame(self.c_apo, fg_color="transparent")
-        apo_top.pack(fill="x", padx=16, pady=(12, 4))
+        eng_top = ctk.CTkFrame(self.c_engine, fg_color="transparent")
+        eng_top.pack(fill="x", padx=16, pady=(12, 6))
 
-        apo_title = ctk.CTkLabel(apo_top, text="🛠️ System Audio Driver (Equalizer APO)", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=THEME["accent_gold"])
-        apo_title.pack(side="left")
+        eng_title = ctk.CTkLabel(
+            eng_top, text="⚡ System Audio Pipeline Engine",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text_color=THEME["accent_gold"]
+        )
+        eng_title.pack(side="left")
 
-        apo_available = os.path.isdir(os.path.dirname(APO_DEFAULT_PATH))
-        apo_status = "✓ APO config folder found" if apo_available else "⚠️ APO config folder not detected"
-        status_color = THEME["accent_green"] if apo_available else THEME["accent_bronze"]
-        st_lbl = ctk.CTkLabel(apo_top, text=apo_status, font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), text_color=status_color)
-        st_lbl.pack(side="right")
+        self.lbl_engine_badge = ctk.CTkLabel(
+            eng_top, text="● DIRECT VST ACTIVE",
+            font=ctk.CTkFont(family="Segoe UI", size=10, weight="bold"),
+            text_color=THEME["accent_green"],
+            fg_color=THEME["pill_bg"],
+            corner_radius=6,
+            padx=8, pady=2
+        )
+        self.lbl_engine_badge.pack(side="right")
 
-        apo_desc = ctk.CTkLabel(
-            self.c_apo,
-            text=f"Equalizer APO main config: {APO_DEFAULT_PATH}\nSONIQ MAX writes a separate managed filter file and adds an Include line, preserving your existing config.",
+        # Engine Mode Segmented Button
+        sel_row = ctk.CTkFrame(self.c_engine, fg_color="transparent")
+        sel_row.pack(fill="x", padx=16, pady=(0, 10))
+
+        self.seg_engine = ctk.CTkSegmentedButton(
+            sel_row,
+            values=["🚀 Direct Soniq Engine (No APO)", "🛠️ Equalizer APO Driver (Legacy)"],
+            command=self.on_engine_mode_selected,
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            selected_color=THEME["accent_green"],
+            selected_hover_color=THEME["accent_green"],
+            unselected_color=THEME["bg_dark"],
+            unselected_hover_color=THEME["pill_bg"],
+            corner_radius=8
+        )
+        self.seg_engine.pack(fill="x")
+
+        # Direct Soniq Engine Box
+        self.box_direct = ctk.CTkFrame(self.c_engine, fg_color=THEME["bg_dark"], corner_radius=8, border_width=1, border_color=THEME["card_border"])
+        self.box_direct.pack(fill="x", padx=16, pady=(0, 12))
+
+        lbl_direct_desc = ctk.CTkLabel(
+            self.box_direct,
+            text=(
+                "• Intercepts Windows audio directly in RAM and passes samples through SoniqMaxDSP.dll.\n"
+                "• Equalizer APO is completely bypassed (no driver installation, reboots, or config file writes required).\n"
+                "• Psychoacoustic sub-harmonic bass, 2.8 kHz vocal presence, Haas 3D stereo, and peak brickwall limiting."
+            ),
             font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
         )
-        apo_desc.pack(anchor="w", padx=16, pady=(0, 10))
+        lbl_direct_desc.pack(anchor="w", padx=12, pady=(10, 6))
 
-        btn_row = ctk.CTkFrame(self.c_apo, fg_color="transparent")
-        btn_row.pack(fill="x", padx=16, pady=(0, 14))
+        self.lbl_pipeline_flow = ctk.CTkLabel(
+            self.box_direct,
+            text="Pipeline: [Detecting Endpoints...]",
+            font=ctk.CTkFont(family="Consolas", size=10, weight="bold"),
+            text_color=THEME["accent_gold"]
+        )
+        self.lbl_pipeline_flow.pack(anchor="w", padx=12, pady=(0, 8))
+
+        # Direct Engine DSP Toggle & Status Row
+        vst_toggle_row = ctk.CTkFrame(self.box_direct, fg_color="transparent")
+        vst_toggle_row.pack(fill="x", padx=12, pady=(0, 10))
+
+        self.switch_vst = ctk.CTkSwitch(
+            vst_toggle_row,
+            text="Enable Native VST Processing",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=THEME["text_main"],
+            progress_color=THEME["accent_green"],
+            command=self.controller.toggle_vst
+        )
+        self.switch_vst.pack(side="left", padx=(0, 12))
+        FluentTooltip(self.switch_vst, title="Toggle VST Processing", text="Instantly enables or bypasses the real-time C++17 DSP plugin.")
+
+        self.vst_status_lbl = ctk.CTkLabel(
+            vst_toggle_row, text="✓ Active (SoniqMaxDSP.dll)",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=THEME["accent_green"]
+        )
+        self.vst_status_lbl.pack(side="left")
+
+        # Direct Engine Buttons
+        direct_btns = ctk.CTkFrame(self.box_direct, fg_color="transparent")
+        direct_btns.pack(fill="x", padx=12, pady=(0, 12))
+
+        btn_restart_engine = ctk.CTkButton(
+            direct_btns,
+            text="⚡ Restart Pipeline",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            fg_color=THEME["btn_primary"],
+            text_color=THEME["bg_dark"],
+            hover_color=THEME["btn_primary_hover"],
+            command=self.controller.restart_direct_engine
+        )
+        btn_restart_engine.pack(side="left", padx=(0, 8))
+        FluentTooltip(btn_restart_engine, title="Restart Stream", text="Restarts the real-time audio pipeline and reconnects endpoints.")
+
+        self.btn_compile_vst = ctk.CTkButton(
+            direct_btns,
+            text="🔨 Recompile VST",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=THEME["btn_secondary"],
+            text_color=THEME["accent_gold"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["card_border"],
+            command=self.controller.build_vst_plugin
+        )
+        self.btn_compile_vst.pack(side="left", padx=(0, 8))
+        FluentTooltip(self.btn_compile_vst, title="Build VST Plugin", text="Compiles SoniqMaxDSP.dll via vst/build_vst.bat.")
+
+        btn_sound_cpl_direct = ctk.CTkButton(
+            direct_btns,
+            text="🔊 Windows Sound Settings",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=THEME["pill_bg"],
+            text_color=THEME["text_dim"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["pill_border"],
+            command=self.controller.open_sound_cpl
+        )
+        btn_sound_cpl_direct.pack(side="left")
+        FluentTooltip(btn_sound_cpl_direct, title="Windows Sound Control Panel", text="Set your default playback device to Virtual Cable for 100% system routing.")
+
+        # Equalizer APO Box (shown only when APO mode is selected)
+        self.box_apo = ctk.CTkFrame(self.c_engine, fg_color=THEME["bg_dark"], corner_radius=8, border_width=1, border_color=THEME["card_border"])
+
+        apo_desc = ctk.CTkLabel(
+            self.box_apo,
+            text=f"Equalizer APO main config: {APO_DEFAULT_PATH}\nSONIQ MAX writes a managed filter file and adds an Include line to config.txt.",
+            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
+        )
+        apo_desc.pack(anchor="w", padx=12, pady=(10, 6))
+
+        apo_btn_row = ctk.CTkFrame(self.box_apo, fg_color="transparent")
+        apo_btn_row.pack(fill="x", padx=12, pady=(0, 12))
 
         btn_sync = ctk.CTkButton(
-            btn_row, 
+            apo_btn_row, 
             text="⚡ Re-sync System Audio", 
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"), 
             fg_color=THEME["btn_primary"], 
@@ -54,11 +176,11 @@ class SettingsTab(ctk.CTkFrame):
             hover_color=THEME["btn_primary_hover"], 
             command=self.controller.apply_to_system_audio
         )
-        btn_sync.pack(side="left", padx=(0, 10))
+        btn_sync.pack(side="left", padx=(0, 8))
         FluentTooltip(btn_sync, title="Synchronize Equalizer APO", text="Updates the SONIQ MAX managed filter file and ensures the main config includes it.")
 
         btn_guide = ctk.CTkButton(
-            btn_row, 
+            apo_btn_row, 
             text="📘 Driver Setup Guide", 
             font=ctk.CTkFont(family="Segoe UI", size=11), 
             fg_color=THEME["btn_secondary"], 
@@ -68,12 +190,12 @@ class SettingsTab(ctk.CTkFrame):
             border_color=THEME["card_border"], 
             command=self.controller.open_driver_setup
         )
-        btn_guide.pack(side="left", padx=(0, 10))
-        FluentTooltip(btn_guide, title="APO Setup Wizard", text="Opens step-by-step instructions for installing and enabling Equalizer APO on your sound card.")
+        btn_guide.pack(side="left", padx=(0, 8))
+        FluentTooltip(btn_guide, title="APO Setup Wizard", text="Opens step-by-step instructions for installing Equalizer APO on your sound card.")
 
-        btn_sound_cpl = ctk.CTkButton(
-            btn_row, 
-            text="🔊 Windows Sound Control Panel", 
+        btn_sound_cpl_apo = ctk.CTkButton(
+            apo_btn_row, 
+            text="🔊 Windows Sound Settings", 
             font=ctk.CTkFont(family="Segoe UI", size=11), 
             fg_color=THEME["pill_bg"], 
             text_color=THEME["text_dim"], 
@@ -82,64 +204,7 @@ class SettingsTab(ctk.CTkFrame):
             border_color=THEME["pill_border"], 
             command=self.controller.open_sound_cpl
         )
-        btn_sound_cpl.pack(side="right")
-        FluentTooltip(btn_sound_cpl, title="Windows Sound Control Panel", text="Launches classic mmsys.cpl to configure default playback devices and sample rates.")
-
-        # Card 2: Native SONIQ MAX VST 2.4 Audio Engine
-        self.c_vst = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
-        self.c_vst.pack(fill="x", pady=6)
-
-        vst_top = ctk.CTkFrame(self.c_vst, fg_color="transparent")
-        vst_top.pack(fill="x", padx=16, pady=(12, 4))
-
-        vst_title = ctk.CTkLabel(vst_top, text="🎛️ Native Psychoacoustic DSP Engine (VST 2.4)", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=THEME["accent_gold"])
-        vst_title.pack(side="left")
-
-        self.vst_status_lbl = ctk.CTkLabel(vst_top, text="", font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"))
-        self.vst_status_lbl.pack(side="right")
-
-        vst_desc = ctk.CTkLabel(
-            self.c_vst,
-            text=(
-                "Proprietary 64-bit real-time C++ audio plugin for Equalizer APO.\n"
-                "• Psychoacoustic 2nd/3rd Harmonic Exciter (deep bass on small speakers/headphones)\n"
-                "• Dynamic 2.8 kHz Formant Vocal Clarity Boost\n"
-                "• 3D Binaural Spatializer (Haas interaural delay & phase widening)\n"
-                "• Hardware-grade Soft-Knee Brickwall Peak Limiter (0 dBFS digital protection)"
-            ),
-            font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
-        )
-        vst_desc.pack(anchor="w", padx=16, pady=(0, 10))
-
-        vst_btn_row = ctk.CTkFrame(self.c_vst, fg_color="transparent")
-        vst_btn_row.pack(fill="x", padx=16, pady=(0, 14))
-
-        self.switch_vst = ctk.CTkSwitch(
-            vst_btn_row,
-            text="Enable Native VST Processing",
-            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
-            text_color=THEME["text_main"],
-            progress_color=THEME["accent_green"],
-            command=self.controller.toggle_vst
-        )
-        self.switch_vst.pack(side="left", padx=(0, 14))
-        FluentTooltip(self.switch_vst, title="Toggle VST Engine", text="Directly activates/deactivates the SoniqMaxDSP plugin inside Equalizer APO.")
-
-        self.btn_compile_vst = ctk.CTkButton(
-            vst_btn_row,
-            text="🔨 Compile & Deploy VST",
-            font=ctk.CTkFont(family="Segoe UI", size=11),
-            fg_color=THEME["btn_secondary"],
-            text_color=THEME["accent_gold"],
-            hover_color=THEME["btn_secondary_hover"],
-            border_width=1,
-            border_color=THEME["card_border"],
-            command=self.controller.build_vst_plugin
-        )
-        self.btn_compile_vst.pack(side="left")
-        FluentTooltip(self.btn_compile_vst, title="Build VST Plugin", text="Runs vst/build_vst.bat to compile SoniqMaxDSP.dll and install it to Equalizer APO's VST folder.")
-
-        self.update_vst_ui()
+        btn_sound_cpl_apo.pack(side="left")
 
         # Card 2: Collapsible Accordion for Global System Hotkeys
         self.c_hk = CollapsibleSection(
@@ -203,8 +268,8 @@ class SettingsTab(ctk.CTkFrame):
         # Card 3: Collapsible Accordion for Advanced Driver Diagnostics & Overrides
         self.c_advanced = CollapsibleSection(
             self.container,
-            title="⚙️ Equalizer APO Config Details",
-            subtitle="Generated filters and APO config details",
+            title="⚙️ Diagnostics & Engine Details",
+            subtitle="Audio routing and configuration details",
             is_expanded=False,
             badge="POWER USER"
         )
@@ -216,84 +281,111 @@ class SettingsTab(ctk.CTkFrame):
         adv_details = (
             f"• APO Primary File: {APO_DEFAULT_PATH}\n"
             "• Local Fallback Config: SONIQ_APO_Config.txt\n"
-            "• Managed Equalizer APO Include: SONIQ_MAX_Config.txt\n"
+            "• Direct VST Binary: vst/bin/SoniqMaxDSP.dll (Static x64 C++17)\n"
+            "• Processing Latency: ~10ms (WASAPI 48kHz Stereo)\n"
             "• DWM Accent Hook: Live Win32 HKCU\\Software\\Microsoft\\Windows\\DWM\\AccentColor\n"
-            "• Processing: Static Equalizer APO filters and stereo channel mixing"
+            "• Audio Pipeline Engine: Standalone Direct Soniq Engine / Equalizer APO switchable"
         )
-        adv_lbl = ctk.CTkLabel(
-            adv_box,
-            text=adv_details,
+        self.lbl_adv = ctk.CTkLabel(
+            adv_box, text=adv_details,
             font=ctk.CTkFont(family="Consolas", size=10),
-            text_color=THEME["text_dim"],
-            justify="left"
+            text_color=THEME["text_dim"], justify="left"
         )
-        adv_lbl.pack(anchor="w", padx=14, pady=10)
+        self.lbl_adv.pack(anchor="w", padx=12, pady=10)
 
-        # Card 4: Windows System Startup
+        # Card 4: Windows Startup Configuration
         self.c_boot = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
         self.c_boot.pack(fill="x", pady=6)
 
-        boot_top = ctk.CTkFrame(self.c_boot, fg_color="transparent")
-        boot_top.pack(fill="x", padx=16, pady=12)
+        boot_row = ctk.CTkFrame(self.c_boot, fg_color="transparent")
+        boot_row.pack(fill="x", padx=16, pady=12)
 
         self.switch_startup = ctk.CTkSwitch(
-            boot_top,
-            text="🚀 Launch on Windows Boot (Silent in System Tray)",
+            boot_row,
+            text="Launch SONIQ MAX on Windows Startup",
             font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
             text_color=THEME["text_main"],
-            progress_color=THEME["accent_bronze"],
+            progress_color=THEME["accent_green"],
             command=self.controller.toggle_startup
         )
+        self.switch_startup.pack(side="left")
         if self.controller.is_startup_registered():
             self.switch_startup.select()
-        self.switch_startup.pack(side="left")
+        else:
+            self.switch_startup.deselect()
 
-        FluentTooltip(
-            self.switch_startup,
-            title="Silent Windows Boot",
-            text="Registers in Windows Run registry key. Boots directly into system tray with empty working set memory."
-        )
-
-        # Card 5: About
+        # Card 5: Application Info & Build
         self.c_about = ctk.CTkFrame(self.container, fg_color=THEME["card_bg"], corner_radius=12, border_width=1, border_color=THEME["card_border"])
         self.c_about.pack(fill="x", pady=6)
 
-        ab_title = ctk.CTkLabel(self.c_about, text="SONIQ MAX PRO v2.5 (Windows 11 Native Fluent Edition)", font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color=THEME["accent_gold"])
-        ab_title.pack(anchor="w", padx=16, pady=(12, 2))
+        about_box = ctk.CTkFrame(self.c_about, fg_color="transparent")
+        about_box.pack(fill="x", padx=16, pady=12)
 
-        ab_text = ctk.CTkLabel(
-            self.c_about,
-            text="Windows audio profile manager using Equalizer APO filters.\nIncludes EQ curves, output trim, and optional stereo channel mixing.",
+        lbl_abt_title = ctk.CTkLabel(about_box, text="SONIQ MAX PRO · v2.5.0 Standalone", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=THEME["accent_gold"])
+        lbl_abt_title.pack(anchor="w")
+
+        lbl_abt_body = ctk.CTkLabel(
+            about_box,
+            text="Hardware-Optimized Psychoacoustic Audio Suite for Windows 11.\nDirect VST Pipeline & Intelligent Content-Aware Sound Shaping.",
             font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
         )
-        ab_text.pack(anchor="w", padx=16, pady=(0, 14))
+        lbl_abt_body.pack(anchor="w", pady=(2, 0))
+
+        # Initial UI synchronization
+        self.update_engine_ui()
+
+    def on_engine_mode_selected(self, choice):
+        mode = "direct" if "Direct" in choice else "apo"
+        self.controller.set_engine_mode(mode)
+
+    def update_engine_ui(self):
+        mode = getattr(self.controller, "engine_mode", "direct")
+        if mode == "direct":
+            self.seg_engine.set("🚀 Direct Soniq Engine (No APO)")
+            self.lbl_engine_badge.configure(text="● DIRECT VST ACTIVE", text_color=THEME["accent_green"])
+            self.box_direct.pack(fill="x", padx=16, pady=(0, 12))
+            self.box_apo.pack_forget()
+
+            # Refresh pipeline status
+            bridge = getattr(self.controller, "audio_bridge", None)
+            if bridge and bridge.is_running:
+                flow_text = f"Pipeline: [{bridge.last_status_msg}] · 48kHz Stereo Float32"
+            elif bridge:
+                flow_text = f"Pipeline: Standby ({bridge.last_status_msg})"
+            else:
+                flow_text = "Pipeline: Initializing..."
+            self.lbl_pipeline_flow.configure(text=flow_text)
+        else:
+            self.seg_engine.set("🛠️ Equalizer APO Driver (Legacy)")
+            self.lbl_engine_badge.configure(text="● APO DRIVER MODE", text_color=THEME["accent_gold"])
+            self.box_apo.pack(fill="x", padx=16, pady=(0, 12))
+            self.box_direct.pack_forget()
+
+        self.update_vst_ui()
 
     def update_vst_ui(self):
         installed = self.controller.is_vst_installed()
-        if installed:
-            self.vst_status_lbl.configure(
-                text="✓ Active in Equalizer APO (SoniqMaxDSP.dll)",
-                text_color=THEME["accent_green"]
-            )
-            self.btn_compile_vst.configure(text="🔨 Recompile VST")
-        else:
-            self.vst_status_lbl.configure(
-                text="⚡ Source Ready (vst/src/) · Ready to build",
-                text_color=THEME["accent_bronze"]
-            )
-            self.btn_compile_vst.configure(text="🔨 Compile & Deploy VST")
+        if hasattr(self, "vst_status_lbl"):
+            if installed:
+                self.vst_status_lbl.configure(
+                    text="✓ Active (SoniqMaxDSP.dll)",
+                    text_color=THEME["accent_green"]
+                )
+                self.btn_compile_vst.configure(text="🔨 Recompile VST")
+            else:
+                self.vst_status_lbl.configure(
+                    text="⚡ Source Ready (vst/src/)",
+                    text_color=THEME["accent_bronze"]
+                )
+                self.btn_compile_vst.configure(text="🔨 Compile VST")
 
-        if getattr(self.controller, "use_vst", True) and installed:
-            self.switch_vst.select()
-        else:
-            if not installed:
-                self.switch_vst.deselect()
-            elif getattr(self.controller, "use_vst", True):
+        if hasattr(self, "switch_vst"):
+            if getattr(self.controller, "use_vst", True) and installed:
                 self.switch_vst.select()
             else:
                 self.switch_vst.deselect()
 
     def animate_staggered_entrance(self):
         """Sequential waterfall entrance for Settings view."""
-        cards = [self.c_apo, self.c_vst, self.c_hk, self.c_advanced, self.c_boot, self.c_about]
+        cards = [self.c_engine, self.c_hk, self.c_advanced, self.c_boot, self.c_about]
         stagger_cascade_entrance(self.container, cards, step_delay_ms=22)

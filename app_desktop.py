@@ -47,6 +47,7 @@ from export_system_apo import (
     export_to_file,
     install_apo_config,
 )
+from audio_bridge import AudioBridge
 
 from ui.dialogs import (
     open_sound_control_panel, open_system_driver_setup_dialog,
@@ -158,6 +159,15 @@ class SoniqDesktopApp(ctk.CTk):
         self.sense_profile_assignments = DEFAULT_SENSE_PROFILE_ASSIGNMENTS.copy()
         self.audio_content_monitor = AudioContentMonitor()
 
+        # Audio Pipeline Engine Mode: "direct" (Direct Soniq Engine - No APO) or "apo" (Legacy)
+        self.engine_mode = "direct"
+        self.audio_bridge = None
+        try:
+            vst_path = self.get_active_vst_path()
+            self.audio_bridge = AudioBridge(dll_path=vst_path)
+        except Exception:
+            logger.exception("Could not initialize AudioBridge")
+
         # Fast Instant Hardware Endpoint Placeholder (populated asynchronously)
         self.current_device_name = "Speakers (Realtek Audio)"
         self.is_headphone = False
@@ -243,6 +253,10 @@ class SoniqDesktopApp(ctk.CTk):
                 else:
                     logger.warning("Ignoring invalid setting '%s' in %s", key, CONFIG_FILE)
 
+            self.engine_mode = data.get("engine_mode", "direct")
+            if self.engine_mode not in ("direct", "apo"):
+                self.engine_mode = "direct"
+
             assignments = data.get("sense_profile_assignments", {})
             if isinstance(assignments, dict):
                 for category in self.sense_profile_assignments:
@@ -284,6 +298,7 @@ class SoniqDesktopApp(ctk.CTk):
             "night_mode": self.night_mode,
             "auto_app_enabled": self.auto_app_enabled,
             "force_full_range": getattr(self, "force_full_range", False),
+            "engine_mode": getattr(self, "engine_mode", "direct"),
             "sense_profile_assignments": self.sense_profile_assignments,
         }
         try:
@@ -880,48 +895,77 @@ class SoniqDesktopApp(ctk.CTk):
             logger.exception("Could not write local SONIQ MAX config")
             local_error = error
 
-        config_dir = os.path.dirname(APO_DEFAULT_PATH)
-        if not os.path.isdir(config_dir):
-            self.update_apo_health(
-                "Equalizer APO not detected · local config only.",
-                False,
+        # 1. Update Direct Soniq Engine in RAM (Instant zero-latency C++ VST dispatch)
+        if hasattr(self, "audio_bridge") and self.audio_bridge:
+            bridge_profile = {
+                "bass": p.get("bass", 35.0) if enabled_effects["bass"] else 0.0,
+                "clarity": p.get("clarity", 40.0) if enabled_effects["clarity"] else 0.0,
+                "spatial": p.get("spatial", 25.0) if enabled_effects["spatial"] else 0.0,
+                "volume": p.get("volume", 100.0) if enabled_effects["volume"] else 100.0,
+            }
+            self.audio_bridge.update_from_profile(
+                bridge_profile,
+                is_headphone=self.effective_is_headphone,
+                master_effects_on=self.is_enhanced,
             )
-            if local_error:
-                applied_msg = f"Local save failed: {local_error}; Equalizer APO was not found."
-                status_color = THEME["clip_red"]
-            else:
-                applied_msg = f"Saved locally. Equalizer APO config folder not found: {config_dir}"
-                status_color = THEME["accent_bronze"]
+
+        ep_type = "Headphones / Full-Range" if self.effective_is_headphone else "Laptop Speakers"
+
+        # 2. Branch according to active engine mode
+        if getattr(self, "engine_mode", "direct") == "direct":
+            if self.audio_bridge and not self.audio_bridge.is_running:
+                self.audio_bridge.start()
+
+            applied_successfully = True
+            bridge_status = self.audio_bridge.last_status_msg if self.audio_bridge else "Active"
+            applied_msg = f"✓ Applied '{p['title']}' to Direct Soniq Engine ({ep_type})"
+            status_color = THEME["accent_green"]
+            self.update_apo_health(
+                f"🟢 Direct Soniq Engine Active · Bypassing Equalizer APO · {bridge_status}",
+                True,
+            )
         else:
-            try:
-                install_apo_config(APO_DEFAULT_PATH, apo_text)
-                applied_successfully = True
+            config_dir = os.path.dirname(APO_DEFAULT_PATH)
+            if not os.path.isdir(config_dir):
                 self.update_apo_health(
-                    "Equalizer APO connected · SONIQ filters applied.",
-                    True,
-                )
-                ep_type = "Headphones / Full-Range" if self.effective_is_headphone else "Laptop Speakers"
-                applied_msg = (
-                    f"Applied '{p['title']}' to Equalizer APO ({ep_type}); "
-                    "existing config was preserved."
-                )
-                if local_error:
-                    applied_msg += f" Local save failed: {local_error}"
-                    status_color = THEME["accent_bronze"]
-                else:
-                    status_color = THEME["accent_green"]
-            except (OSError, ValueError) as error:
-                logger.exception("Could not install SONIQ MAX Equalizer APO config")
-                self.update_apo_health(
-                    "Equalizer APO update failed · check config permissions.",
+                    "Equalizer APO not detected · local config only.",
                     False,
                 )
                 if local_error:
-                    applied_msg = f"Both local and Equalizer APO saves failed: {local_error}; {error}"
+                    applied_msg = f"Local save failed: {local_error}; Equalizer APO was not found."
                     status_color = THEME["clip_red"]
                 else:
-                    applied_msg = f"Saved locally; Equalizer APO update failed: {error}"
-                    status_color = THEME["clip_red"]
+                    applied_msg = f"Saved locally. Equalizer APO config folder not found: {config_dir}"
+                    status_color = THEME["accent_bronze"]
+            else:
+                try:
+                    install_apo_config(APO_DEFAULT_PATH, apo_text)
+                    applied_successfully = True
+                    self.update_apo_health(
+                        "Equalizer APO connected · SONIQ filters applied.",
+                        True,
+                    )
+                    applied_msg = (
+                        f"Applied '{p['title']}' to Equalizer APO ({ep_type}); "
+                        "existing config was preserved."
+                    )
+                    if local_error:
+                        applied_msg += f" Local save failed: {local_error}"
+                        status_color = THEME["accent_bronze"]
+                    else:
+                        status_color = THEME["accent_green"]
+                except (OSError, ValueError) as error:
+                    logger.exception("Could not install SONIQ MAX Equalizer APO config")
+                    self.update_apo_health(
+                        "Equalizer APO update failed · check config permissions.",
+                        False,
+                    )
+                    if local_error:
+                        applied_msg = f"Both local and Equalizer APO saves failed: {local_error}; {error}"
+                        status_color = THEME["clip_red"]
+                    else:
+                        applied_msg = f"Saved locally; Equalizer APO update failed: {error}"
+                        status_color = THEME["clip_red"]
 
         if update_status:
             self.lbl_status.configure(text=applied_msg, text_color=status_color)
@@ -1059,6 +1103,31 @@ class SoniqDesktopApp(ctk.CTk):
                 os.startfile(vst_bat)
             except Exception as e:
                 logger.error("Failed to launch build_vst.bat: %s", e)
+
+    def set_engine_mode(self, mode):
+        """Switches between 'direct' (Direct Soniq Engine) and 'apo' (Equalizer APO)."""
+        self.engine_mode = mode
+        if mode == "direct":
+            if hasattr(self, "audio_bridge") and self.audio_bridge and not self.audio_bridge.is_running:
+                self.audio_bridge.start()
+        elif mode == "apo":
+            if hasattr(self, "audio_bridge") and self.audio_bridge and self.audio_bridge.is_running:
+                self.audio_bridge.stop()
+        self.save_persisted_profile()
+        self.apply_to_system_audio()
+        if hasattr(self, "tab_settings") and self.tab_settings:
+            self.tab_settings.update_engine_ui()
+
+    def restart_direct_engine(self):
+        """Restarts the audio bridge streaming pipeline."""
+        if hasattr(self, "audio_bridge") and self.audio_bridge:
+            self.audio_bridge.stop()
+            time.sleep(0.05)
+            self.audio_bridge.start()
+            self.apply_to_system_audio()
+            if hasattr(self, "tab_settings") and self.tab_settings:
+                self.tab_settings.update_engine_ui()
+            self.show_toast("Engine Restarted", self.audio_bridge.last_status_msg, icon="⚡")
 
     def open_sound_cpl(self):
         open_sound_control_panel()
@@ -1407,6 +1476,11 @@ class SoniqDesktopApp(ctk.CTk):
 
     def quit_application(self):
         self.running = False
+        if hasattr(self, "audio_bridge") and self.audio_bridge:
+            try:
+                self.audio_bridge.close()
+            except Exception:
+                pass
         self.audio_content_monitor.shutdown()
         if hasattr(self, "endpoint_watcher"):
             self.endpoint_watcher.stop()

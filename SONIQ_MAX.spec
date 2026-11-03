@@ -21,6 +21,11 @@ tmp_ret = collect_all('comtypes')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('soundcard')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('sounddevice')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('numpy')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+hiddenimports += ['audio_bridge']
 
 
 
@@ -34,7 +39,7 @@ a = Analysis(
     excludes=[
         'torch', 'transformers', 'pandas', 'matplotlib', 'IPython', 'jupyter',
         'pyarrow', 'datasets', 'safetensors',
-        'scipy', 'sounddevice', 'soundfile',
+        'scipy', 'soundfile',
         'test', 'unittest'
     ],
     noarchive=False,
