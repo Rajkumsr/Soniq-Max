@@ -88,3 +88,6 @@ crash_dumps/
 # *.pt
 # *.bin
 
+# Isolated Demo & Experiments Folder
+demo/
+
