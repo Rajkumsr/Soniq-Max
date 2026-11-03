@@ -2,17 +2,22 @@
  * SONIQ MAX PRO — Core DSP Engine
  * Pure C++ Audio DSP Architecture (Decoupled from VST / Host Interfaces)
  *
- * Can be hosted by:
- * 1. VST 2.4 Adapter (SoniqMaxDSP.cpp -> SoniqMaxDSP.dll)
- * 2. Native Windows Audio Processing Object (soniqmaxapo.dll)
- * 3. Direct C ABI / ctypes Stream Host
- * 4. Embedded / Unit Test Harnesses
+ * Single Source of Truth (SSOT) Audio Enhancement Pipeline:
+ * 1. Headroom Preamp Gain (with smooth linear ramping)
+ * 2. Speaker 120 Hz Subsonic Highpass (configurable)
+ * 3. 10-Band Parametric Equalizer (32Hz, 64Hz, 125Hz, 250Hz, 500Hz, 1kHz, 2kHz, 4kHz, 8kHz, 16kHz)
+ * 4. Psychoacoustic Harmonic Bass Exciter (130Hz LP, 28Hz Subsonic HP, 2nd/3rd harmonics, 25Hz DC Blocker)
+ * 5. Vocal Clarity & Presence Network (2.9kHz Formant, 7.5kHz De-Esser, 300Hz Mud Cut)
+ * 6. Advanced Spatial Audio Engine (Center-Preserving Mid/Side Widener OR HRTF Binaural)
+ * 7. Master Output Gain
+ * 8. True Lookahead Peak Limiter (4 ms preallocated circular buffer, -0.2 dBFS ceiling)
  *
  * Design Guarantees:
  * - ZERO dynamic memory allocations in audio callback (strictly real-time safe)
  * - ZERO mutex locking or blocking syscalls
  * - Strict NaN / Inf / Denormal sanitization
  * - 100% sample-rate adaptive (44.1k to 192k Hz)
+ * - Individual module bypasses for EQ, Bass, Clarity, Spatial, and Limiter
  */
 
 #pragma once
@@ -24,17 +29,46 @@
 
 namespace SoniqAudio {
 
-static constexpr int NUM_PARAMS = 7;
+static constexpr int NUM_PARAMS = 23;
 static constexpr uint32_t PLUGIN_UNIQUE_ID = 0x53714D78; // 'SqMx'
 
+// Standard 10 Graphic Equalizer Center Frequencies (Hz)
+static constexpr float EQ_FREQUENCIES[10] = {
+    32.0f, 64.0f, 125.0f, 250.0f, 500.0f,
+    1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f
+};
+
 enum ParamIndex {
-    kParamBass = 0,        // Bass Exciter (0.0 to 1.0)
-    kParamClarity = 1,     // Vocal Clarity (0.0 to 1.0)
-    kParamSpatial = 2,     // Spatial Width (0.0 to 1.0)
-    kParamLimiter = 3,     // Lookahead Limiter On/Off (0.0 or 1.0)
-    kParamMasterGain = 4,  // Master Linear Gain (0.0 to 4.0, default 1.0)
-    kParamSpatialMode = 5, // Spatial Mode (0.0 = Mid/Side Stereo, 1.0 = HRTF Binaural)
-    kParamCeiling = 6      // Limiter Output Ceiling Linear (default 0.9772 = -0.2 dBFS)
+    // Legacy VST indices (MUST BE PRESERVED 0 - 6)
+    kParamBass = 0,         // Bass Exciter (0.0 to 1.0)
+    kParamClarity = 1,      // Vocal Clarity (0.0 to 1.0)
+    kParamSpatial = 2,      // Spatial Width (0.0 to 1.0)
+    kParamLimiter = 3,      // Lookahead Limiter On/Off (0.0 or 1.0)
+    kParamMasterGain = 4,   // Master Linear Gain (0.0 to 4.0, default 1.0)
+    kParamSpatialMode = 5,  // Spatial Mode (0.0 = Mid/Side Stereo, 1.0 = HRTF Binaural)
+    kParamCeiling = 6,      // Limiter Output Ceiling Linear (default 0.9772 = -0.2 dBFS)
+
+    // Extended VST SSOT Parameters
+    kParamPreamp = 7,       // Headroom Preamp Gain in dB (-24.0 to +12.0 dB, default 0.0)
+    kParamEQEnable = 8,     // 10-Band Parametric EQ On/Off (0.0 or 1.0, default 1.0)
+    kParamBassEnable = 9,   // Bass Exciter Module On/Off (0.0 or 1.0, default 1.0)
+    kParamClarityEnable = 10,// Vocal Clarity Module On/Off (0.0 or 1.0, default 1.0)
+    kParamSpatialEnable = 11,// Spatial Module On/Off (0.0 or 1.0, default 1.0)
+
+    // 10 Parametric EQ Bands (-12.0 to +12.0 dB each)
+    kParamEQ_32Hz = 12,     // Band 0: 32 Hz
+    kParamEQ_64Hz = 13,     // Band 1: 64 Hz
+    kParamEQ_125Hz = 14,    // Band 2: 125 Hz
+    kParamEQ_250Hz = 15,    // Band 3: 250 Hz
+    kParamEQ_500Hz = 16,    // Band 4: 500 Hz
+    kParamEQ_1kHz = 17,     // Band 5: 1000 Hz
+    kParamEQ_2kHz = 18,     // Band 6: 2000 Hz
+    kParamEQ_4kHz = 19,     // Band 7: 4000 Hz
+    kParamEQ_8kHz = 20,     // Band 8: 8000 Hz
+    kParamEQ_16kHz = 21,    // Band 9: 16000 Hz
+
+    // Device Acoustic Routing
+    kParamSpeakerHPF = 22   // Speaker 120 Hz HPF (0.0 = Off / Full Range, 1.0 = On / Laptop Speakers)
 };
 
 // 2nd-order Audio EQ Cookbook Biquad Filter with NaN/denormal protection
@@ -87,7 +121,7 @@ public:
         a2 = (1.0f - alpha) / a0;
     }
 
-    void setPeaking(float freq, float gainDb, float sampleRate, float q = 1.414f) {
+    void setPeaking(float freq, float gainDb, float sampleRate, float q = 1.4142f) {
         if (std::abs(gainDb) < 0.01f) {
             setPassThrough();
             return;
@@ -170,7 +204,7 @@ public:
 
 /**
  * Pure C++ SoniqDspEngine
- * Self-contained DSP audio processor implementing all psychoacoustic algorithms.
+ * Single Source of Truth Audio Enhancement Processor.
  */
 class SoniqDspEngine {
 public:
@@ -182,7 +216,14 @@ public:
     float smoothedClarity;
     float smoothedSpatial;
     float smoothedMasterGain;
+    float smoothedPreampGain;
     float smoothCoef;
+
+    // 10-Band Parametric Equalizer
+    Biquad eqBands[10];
+
+    // Speaker Subsonic High-Pass (120 Hz)
+    Biquad speakerHPFilter;
 
     // Bass DSP filters
     Biquad bassLowPass;
@@ -216,6 +257,8 @@ public:
 
     SoniqDspEngine() {
         sampleRate = 48000.0f;
+        std::memset(params, 0, sizeof(params));
+
         params[kParamBass] = 0.50f;
         params[kParamClarity] = 0.50f;
         params[kParamSpatial] = 0.35f;
@@ -223,6 +266,19 @@ public:
         params[kParamMasterGain] = 1.0f;  // 1.0 = Unity
         params[kParamSpatialMode] = 0.0f; // 0.0 = M/S Stereo, 1.0 = HRTF Binaural
         params[kParamCeiling] = 0.9772f;  // -0.2 dBFS
+
+        params[kParamPreamp] = 0.0f;      // 0.0 dB
+        params[kParamEQEnable] = 1.0f;    // ON
+        params[kParamBassEnable] = 1.0f;  // ON
+        params[kParamClarityEnable] = 1.0f; // ON
+        params[kParamSpatialEnable] = 1.0f; // ON
+
+        // EQ Bands initialized to 0.0 dB flat
+        for (int i = 0; i < 10; ++i) {
+            params[kParamEQ_32Hz + i] = 0.0f;
+        }
+
+        params[kParamSpeakerHPF] = 0.0f;  // OFF by default (Full-range)
 
         reset();
         recalculateSampleRateDependent();
@@ -234,11 +290,17 @@ public:
         smoothedClarity = params[kParamClarity];
         smoothedSpatial = params[kParamSpatial];
         smoothedMasterGain = params[kParamMasterGain];
+        smoothedPreampGain = std::pow(10.0f, params[kParamPreamp] / 20.0f);
 
         limiterEnv = 0.0f;
         limiterGain = 1.0f;
         lookaheadWriteIdx = 0;
         hrtfIndex = 0;
+
+        for (int i = 0; i < 10; ++i) {
+            eqBands[i].reset();
+        }
+        speakerHPFilter.reset();
 
         bassLowPass.reset();
         bassSubsonicHP.reset();
@@ -265,6 +327,9 @@ public:
             params[index] = value;
             if (index == kParamClarity) {
                 updateFilters();
+            } else if (index >= kParamEQ_32Hz && index <= kParamEQ_16kHz) {
+                int bandIdx = index - kParamEQ_32Hz;
+                eqBands[bandIdx].setPeaking(EQ_FREQUENCIES[bandIdx], value, sampleRate, 1.4142f);
             }
         }
     }
@@ -281,6 +346,14 @@ public:
 
         // One-pole parameter smoothing (~25 Hz cutoff, ~30 ms response)
         smoothCoef = 1.0f - std::exp(-2.0f * 3.14159265f * 25.0f / sampleRate);
+
+        // 120 Hz Subsonic Highpass for laptop speakers
+        speakerHPFilter.setHighPass(120.0f, sampleRate, 0.7071f);
+
+        // 10-Band Parametric EQ
+        for (int i = 0; i < 10; ++i) {
+            eqBands[i].setPeaking(EQ_FREQUENCIES[i], params[kParamEQ_32Hz + i], sampleRate, 1.4142f);
+        }
 
         // Bass extraction filters
         bassLowPass.setLowPass(130.0f, sampleRate, 0.7071f);
@@ -305,6 +378,11 @@ public:
     }
 
     void updateFilters() {
+        // 10-Band Parametric EQ
+        for (int i = 0; i < 10; ++i) {
+            eqBands[i].setPeaking(EQ_FREQUENCIES[i], params[kParamEQ_32Hz + i], sampleRate, 1.4142f);
+        }
+
         // Vocal Formant Presence (2900 Hz, Q 1.35)
         float clarityNorm = params[kParamClarity];
         float presenceGainDb = clarityNorm * 5.5f;
@@ -330,8 +408,16 @@ public:
         const float targetClarity = params[kParamClarity];
         const float targetSpatial = params[kParamSpatial];
         const float targetMaster = params[kParamMasterGain];
+        const float targetPreampDb = params[kParamPreamp];
+        const float targetPreampLinear = std::pow(10.0f, targetPreampDb / 20.0f);
+
+        const bool eqOn = params[kParamEQEnable] > 0.5f;
+        const bool bassOn = params[kParamBassEnable] > 0.5f;
+        const bool clarityOn = params[kParamClarityEnable] > 0.5f;
+        const bool spatialOn = params[kParamSpatialEnable] > 0.5f;
         const bool limiterOn = params[kParamLimiter] > 0.5f;
         const bool hrtfOn = params[kParamSpatialMode] > 0.5f;
+        const bool speakerHPFOn = params[kParamSpeakerHPF] > 0.5f;
         const float ceiling = std::max(0.50f, std::min(1.0f, params[kParamCeiling]));
 
         for (int i = 0; i < sampleFrames; ++i) {
@@ -346,18 +432,34 @@ public:
             smoothedClarity += smoothCoef * (targetClarity - smoothedClarity);
             smoothedSpatial += smoothCoef * (targetSpatial - smoothedSpatial);
             smoothedMasterGain += smoothCoef * (targetMaster - smoothedMasterGain);
+            smoothedPreampGain += smoothCoef * (targetPreampLinear - smoothedPreampGain);
 
-            // 1. Psychoacoustic Harmonic Bass Exciter
-            if (smoothedBass > 0.005f) {
-                // Low-frequency band extraction (130 Hz low-pass)
+            // 1. Headroom Preamp Stage
+            l *= smoothedPreampGain;
+            r *= smoothedPreampGain;
+
+            // 2. Speaker 120 Hz Subsonic Highpass Filter (Laptop Speakers)
+            if (speakerHPFOn) {
+                l = speakerHPFilter.process(0, l);
+                r = speakerHPFilter.process(1, r);
+            }
+
+            // 3. 10-Band Parametric Equalizer
+            if (eqOn) {
+                for (int b = 0; b < 10; ++b) {
+                    l = eqBands[b].process(0, l);
+                    r = eqBands[b].process(1, r);
+                }
+            }
+
+            // 4. Psychoacoustic Harmonic Bass Exciter
+            if (bassOn && smoothedBass > 0.005f) {
                 float subL = bassLowPass.process(0, l);
                 float subR = bassLowPass.process(1, r);
 
-                // Subsonic high-pass protection (28 Hz)
                 subL = bassSubsonicHP.process(0, subL);
                 subR = bassSubsonicHP.process(1, subR);
 
-                // Harmonic synthesis: Symmetrical Even (2nd) & Odd (3rd) harmonics
                 float harmEvenL = subL * subL;
                 float harmEvenR = subR * subR;
 
@@ -367,21 +469,18 @@ public:
                 float combinedHarmL = 0.70f * harmEvenL + 0.50f * harmOddL;
                 float combinedHarmR = 0.70f * harmEvenR + 0.50f * harmOddR;
 
-                // Remove DC bias from even harmonic generation
                 combinedHarmL = bassDCBlocker.process(0, combinedHarmL);
                 combinedHarmR = bassDCBlocker.process(1, combinedHarmR);
 
-                // Internal wet/dry blend law: preserve clean sub fundamental + add harmonics
                 float bassBlendL = (1.0f - 0.30f * smoothedBass) * subL + smoothedBass * 0.75f * combinedHarmL;
                 float bassBlendR = (1.0f - 0.30f * smoothedBass) * subR + smoothedBass * 0.75f * combinedHarmR;
 
-                // Seamlessly blend into signal path
                 l += (bassBlendL - subL) * smoothedBass;
                 r += (bassBlendR - subR) * smoothedBass;
             }
 
-            // 2. Vocal Clarity & Presence Enhancer
-            if (smoothedClarity > 0.005f) {
+            // 5. Vocal Clarity & Presence Enhancer
+            if (clarityOn && smoothedClarity > 0.005f) {
                 l = vocalPresence.process(0, l);
                 r = vocalPresence.process(1, r);
                 l = vocalMudNotch.process(0, l);
@@ -390,8 +489,8 @@ public:
                 r = vocalDeEsser.process(1, r);
             }
 
-            // 3. Advanced Spatial Audio Engine
-            if (smoothedSpatial > 0.005f) {
+            // 6. Advanced Spatial Audio Engine
+            if (spatialOn && smoothedSpatial > 0.005f) {
                 const float invSqrt2 = 0.70710678f;
                 float mid = (l + r) * invSqrt2;
                 float side = (l - r) * invSqrt2;
@@ -419,11 +518,11 @@ public:
                 }
             }
 
-            // 4. Master Gain
+            // 7. Master Gain
             l *= smoothedMasterGain;
             r *= smoothedMasterGain;
 
-            // 5. True Lookahead Peak Limiter
+            // 8. True Lookahead Peak Limiter
             if (limiterOn) {
                 lookaheadBufL[lookaheadWriteIdx] = l;
                 lookaheadBufR[lookaheadWriteIdx] = r;
@@ -486,4 +585,3 @@ public:
 };
 
 } // namespace SoniqAudio
-

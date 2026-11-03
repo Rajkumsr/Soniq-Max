@@ -2,9 +2,10 @@
  * SONIQ MAX PRO Real-Time Psychoacoustic DSP Audio Processing Plugin
  * Compatible with Equalizer APO & Direct Soniq Engine (64-bit Windows)
  *
- * Architecture:
+ * Single Source of Truth Architecture:
  * - Core Algorithms: SoniqDspCore.hpp (Decoupled Pure C++ DSP Engine)
  * - VST 2.4 Interface: SoniqMaxEffect (Adapts core engine to VST 2.4 specification)
+ * - 23 Parameters: 10-Band EQ, Preamp, Harmonics, Clarity, Spatial, Limiter, Bypasses
  * - Standard C ABI Exports: Direct high-performance invocation without VST wrapper overhead
  */
 
@@ -22,6 +23,22 @@ using SoniqAudio::kParamLimiter;
 using SoniqAudio::kParamMasterGain;
 using SoniqAudio::kParamSpatialMode;
 using SoniqAudio::kParamCeiling;
+using SoniqAudio::kParamPreamp;
+using SoniqAudio::kParamEQEnable;
+using SoniqAudio::kParamBassEnable;
+using SoniqAudio::kParamClarityEnable;
+using SoniqAudio::kParamSpatialEnable;
+using SoniqAudio::kParamEQ_32Hz;
+using SoniqAudio::kParamEQ_64Hz;
+using SoniqAudio::kParamEQ_125Hz;
+using SoniqAudio::kParamEQ_250Hz;
+using SoniqAudio::kParamEQ_500Hz;
+using SoniqAudio::kParamEQ_1kHz;
+using SoniqAudio::kParamEQ_2kHz;
+using SoniqAudio::kParamEQ_4kHz;
+using SoniqAudio::kParamEQ_8kHz;
+using SoniqAudio::kParamEQ_16kHz;
+using SoniqAudio::kParamSpeakerHPF;
 
 #if defined(_WIN32)
 #define VST_EXPORT __declspec(dllexport)
@@ -71,6 +88,14 @@ public:
         dsp.reset();
     }
 
+    void setParameter(int index, float value) {
+        dsp.setParameter(index, value);
+    }
+
+    float getParameter(int index) const {
+        return dsp.getParameter(index);
+    }
+
     void process(float** in, float** out, int frames) {
         dsp.process(in, out, frames);
     }
@@ -112,6 +137,22 @@ public:
                     case SoniqAudio::kParamMasterGain: std::strncpy(static_cast<char*>(ptr), "MasterGain", 31); return 1;
                     case SoniqAudio::kParamSpatialMode: std::strncpy(static_cast<char*>(ptr), "SpatialMode", 31); return 1;
                     case SoniqAudio::kParamCeiling: std::strncpy(static_cast<char*>(ptr), "Ceiling", 31); return 1;
+                    case SoniqAudio::kParamPreamp: std::strncpy(static_cast<char*>(ptr), "Preamp", 31); return 1;
+                    case SoniqAudio::kParamEQEnable: std::strncpy(static_cast<char*>(ptr), "EQEnable", 31); return 1;
+                    case SoniqAudio::kParamBassEnable: std::strncpy(static_cast<char*>(ptr), "BassEnable", 31); return 1;
+                    case SoniqAudio::kParamClarityEnable: std::strncpy(static_cast<char*>(ptr), "ClarityEnable", 31); return 1;
+                    case SoniqAudio::kParamSpatialEnable: std::strncpy(static_cast<char*>(ptr), "SpatialEnable", 31); return 1;
+                    case SoniqAudio::kParamEQ_32Hz: std::strncpy(static_cast<char*>(ptr), "EQ32Hz", 31); return 1;
+                    case SoniqAudio::kParamEQ_64Hz: std::strncpy(static_cast<char*>(ptr), "EQ64Hz", 31); return 1;
+                    case SoniqAudio::kParamEQ_125Hz: std::strncpy(static_cast<char*>(ptr), "EQ125Hz", 31); return 1;
+                    case SoniqAudio::kParamEQ_250Hz: std::strncpy(static_cast<char*>(ptr), "EQ250Hz", 31); return 1;
+                    case SoniqAudio::kParamEQ_500Hz: std::strncpy(static_cast<char*>(ptr), "EQ500Hz", 31); return 1;
+                    case SoniqAudio::kParamEQ_1kHz: std::strncpy(static_cast<char*>(ptr), "EQ1kHz", 31); return 1;
+                    case SoniqAudio::kParamEQ_2kHz: std::strncpy(static_cast<char*>(ptr), "EQ2kHz", 31); return 1;
+                    case SoniqAudio::kParamEQ_4kHz: std::strncpy(static_cast<char*>(ptr), "EQ4kHz", 31); return 1;
+                    case SoniqAudio::kParamEQ_8kHz: std::strncpy(static_cast<char*>(ptr), "EQ8kHz", 31); return 1;
+                    case SoniqAudio::kParamEQ_16kHz: std::strncpy(static_cast<char*>(ptr), "EQ16kHz", 31); return 1;
+                    case SoniqAudio::kParamSpeakerHPF: std::strncpy(static_cast<char*>(ptr), "SpeakerHPF", 31); return 1;
                 }
                 return 0;
             case effGetParamLabel:
@@ -119,10 +160,26 @@ public:
                     case SoniqAudio::kParamBass:
                     case SoniqAudio::kParamClarity:
                     case SoniqAudio::kParamSpatial: std::strncpy(static_cast<char*>(ptr), "%", 31); return 1;
-                    case SoniqAudio::kParamLimiter: std::strncpy(static_cast<char*>(ptr), "On/Off", 31); return 1;
+                    case SoniqAudio::kParamLimiter:
+                    case SoniqAudio::kParamEQEnable:
+                    case SoniqAudio::kParamBassEnable:
+                    case SoniqAudio::kParamClarityEnable:
+                    case SoniqAudio::kParamSpatialEnable:
+                    case SoniqAudio::kParamSpeakerHPF: std::strncpy(static_cast<char*>(ptr), "On/Off", 31); return 1;
                     case SoniqAudio::kParamMasterGain: std::strncpy(static_cast<char*>(ptr), "x", 31); return 1;
                     case SoniqAudio::kParamSpatialMode: std::strncpy(static_cast<char*>(ptr), "Mode", 31); return 1;
                     case SoniqAudio::kParamCeiling: std::strncpy(static_cast<char*>(ptr), "Linear", 31); return 1;
+                    case SoniqAudio::kParamPreamp:
+                    case SoniqAudio::kParamEQ_32Hz:
+                    case SoniqAudio::kParamEQ_64Hz:
+                    case SoniqAudio::kParamEQ_125Hz:
+                    case SoniqAudio::kParamEQ_250Hz:
+                    case SoniqAudio::kParamEQ_500Hz:
+                    case SoniqAudio::kParamEQ_1kHz:
+                    case SoniqAudio::kParamEQ_2kHz:
+                    case SoniqAudio::kParamEQ_4kHz:
+                    case SoniqAudio::kParamEQ_8kHz:
+                    case SoniqAudio::kParamEQ_16kHz: std::strncpy(static_cast<char*>(ptr), "dB", 31); return 1;
                 }
                 return 0;
             case effGetVstVersion:

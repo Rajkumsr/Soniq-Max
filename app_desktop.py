@@ -906,6 +906,7 @@ class SoniqDesktopApp(ctk.CTk):
                 "clarity": profile_values["clarity"],
                 "spatial": profile_values["spatial_width"],
                 "volume_db": profile_values["volume_boost_db"],
+                "eq": p.get("eq", [0.0] * 10),
             }
             self.audio_bridge.update_from_profile(
                 bridge_profile,

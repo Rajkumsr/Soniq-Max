@@ -30,7 +30,7 @@ effSetBlockSize = 11
 effGetParamName = 8
 effGetEffectName = 45
 
-# SoniqMaxDSP Parameter Indices
+# SoniqMaxDSP Parameter Indices (Single Source of Truth)
 PARAM_BASS_BOOST = 0     # 0.0 - 1.0 (Harmonic Bass Exciter)
 PARAM_CLARITY = 1        # 0.0 - 1.0 (Vocal Formant Clarity)
 PARAM_SPATIAL = 2        # 0.0 - 1.0 (3D Spatializer)
@@ -38,6 +38,22 @@ PARAM_LIMITER = 3        # 0.0 or 1.0 (Lookahead Peak Limiter)
 PARAM_MASTER_GAIN = 4    # 0.0 - 4.0 (Output Gain Multiplier, default 1.0)
 PARAM_SPATIAL_MODE = 5   # 0.0 = Mid/Side Stereo, 1.0 = HRTF Binaural
 PARAM_CEILING = 6        # Limiter Ceiling Linear (default 0.9772 = -0.2 dBFS)
+PARAM_PREAMP = 7         # Preamp Gain in dB (-24.0 to +12.0 dB)
+PARAM_EQ_ENABLE = 8      # 10-Band EQ On/Off (0.0 or 1.0)
+PARAM_BASS_ENABLE = 9    # Bass Module On/Off (0.0 or 1.0)
+PARAM_CLARITY_ENABLE = 10# Clarity Module On/Off (0.0 or 1.0)
+PARAM_SPATIAL_ENABLE = 11# Spatial Module On/Off (0.0 or 1.0)
+PARAM_EQ_32HZ = 12       # Band 0: 32 Hz
+PARAM_EQ_64HZ = 13       # Band 1: 64 Hz
+PARAM_EQ_125HZ = 14      # Band 2: 125 Hz
+PARAM_EQ_250HZ = 15      # Band 3: 250 Hz
+PARAM_EQ_500HZ = 16      # Band 4: 500 Hz
+PARAM_EQ_1KHZ = 17       # Band 5: 1000 Hz
+PARAM_EQ_2KHZ = 18       # Band 6: 2000 Hz
+PARAM_EQ_4KHZ = 19       # Band 7: 4000 Hz
+PARAM_EQ_8KHZ = 20       # Band 8: 8000 Hz
+PARAM_EQ_16KHZ = 21      # Band 9: 16000 Hz
+PARAM_SPEAKER_HPF = 22   # Speaker 120Hz HPF (0.0 = Full-Range, 1.0 = Speaker HPF)
 
 
 # Ctypes VST Structures
@@ -389,6 +405,13 @@ class AudioBridge:
 
             self.param_limiter = 1.0
 
+            # 10-Band EQ & Preamp parameters
+            raw_eq = profile.get("eq", [0.0] * 10)
+            if not isinstance(raw_eq, (list, tuple)) or len(raw_eq) != 10:
+                raw_eq = [0.0] * 10
+
+            preamp_db = float(profile.get("preamp", 0.0))
+
             if self.vst_engine:
                 self.vst_engine.set_param(PARAM_BASS_BOOST, self.param_bass)
                 self.vst_engine.set_param(PARAM_CLARITY, self.param_clarity)
@@ -396,6 +419,15 @@ class AudioBridge:
                 self.vst_engine.set_param(PARAM_LIMITER, self.param_limiter)
                 self.vst_engine.set_param(PARAM_MASTER_GAIN, self.param_volume)
                 self.vst_engine.set_param(PARAM_SPATIAL_MODE, 1.0 if is_headphone else 0.0)
+                self.vst_engine.set_param(PARAM_PREAMP, preamp_db)
+                self.vst_engine.set_param(PARAM_EQ_ENABLE, 1.0)
+                self.vst_engine.set_param(PARAM_BASS_ENABLE, 1.0 if self.param_bass > 0.005 else 0.0)
+                self.vst_engine.set_param(PARAM_CLARITY_ENABLE, 1.0 if self.param_clarity > 0.005 else 0.0)
+                self.vst_engine.set_param(PARAM_SPATIAL_ENABLE, 1.0 if self.param_spatial > 0.005 else 0.0)
+                self.vst_engine.set_param(PARAM_SPEAKER_HPF, 0.0 if is_headphone else 1.0)
+
+                for b in range(10):
+                    self.vst_engine.set_param(PARAM_EQ_32HZ + b, float(raw_eq[b]))
 
     def _audio_callback(self, indata, outdata, frames, time_info, status):
         """

@@ -15,6 +15,10 @@ from audio_bridge import (
     PARAM_SPATIAL,
     PARAM_LIMITER,
     PARAM_MASTER_GAIN,
+    PARAM_PREAMP,
+    PARAM_EQ_ENABLE,
+    PARAM_EQ_1KHZ,
+    PARAM_SPEAKER_HPF,
 )
 
 
@@ -80,3 +84,23 @@ def test_audio_bridge_profile_update():
     bridge.update_from_profile(profile, is_headphone=True, master_effects_on=False)
     assert bridge.master_effects_on is False
     bridge.close()
+
+
+def test_vst_eq_and_preamp_parameters():
+    dll_path = os.path.join(os.path.dirname(__file__), "..", "vst", "bin", "SoniqMaxDSP.dll")
+    if not os.path.isfile(dll_path):
+        pytest.skip("SoniqMaxDSP.dll not found in vst/bin/")
+
+    engine = VstDirectEngine(dll_path, sample_rate=48000, max_block_size=1024)
+    engine.set_param(PARAM_PREAMP, -3.5)
+    assert pytest.approx(engine.get_param(PARAM_PREAMP), 0.01) == -3.5
+
+    engine.set_param(PARAM_EQ_ENABLE, 1.0)
+    assert pytest.approx(engine.get_param(PARAM_EQ_ENABLE), 0.01) == 1.0
+
+    engine.set_param(PARAM_EQ_1KHZ, 4.5)
+    assert pytest.approx(engine.get_param(PARAM_EQ_1KHZ), 0.01) == 4.5
+
+    engine.set_param(PARAM_SPEAKER_HPF, 1.0)
+    assert pytest.approx(engine.get_param(PARAM_SPEAKER_HPF), 0.01) == 1.0
+    engine.close()

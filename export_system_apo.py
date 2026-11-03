@@ -3,8 +3,12 @@ Equalizer APO configuration generation and safe SONIQ MAX installation.
 
 SONIQ MAX writes its filters to a separate managed file and includes that file
 from Equalizer APO's main config, preserving existing user configuration.
-Provides strict separation between APO-only filter mode and Native VST DSP mode
-with zero duplicate processing and conservative headroom management.
+
+VST-Centric Architecture:
+- VST Mode: The native C++ VST engine (SoniqMaxDSP.dll) owns ALL audio processing:
+  10-band EQ, Preamp, Harmonic Bass Exciter, Vocal Clarity, Spatializer, and Lookahead Limiter.
+  Zero duplicate filters or preamps are emitted into Equalizer APO.
+- APO-Only Mode: Safe fallback when VST is disabled or missing; uses static biquads & software preamp.
 """
 import cmath
 import math
@@ -18,6 +22,7 @@ from constants import validate_profile_data
 
 
 EQ_FREQUENCIES = (32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
+EQ_FREQ_TOKENS = ("32Hz", "64Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz")
 MANAGED_CONFIG_NAME = "SONIQ_MAX_Config.txt"
 MANAGED_INCLUDE_MARKER = "# SONIQ MAX managed include"
 _CONFIG_WRITE_LOCK = threading.RLock()
@@ -79,7 +84,6 @@ def _response_magnitude(frequencies, sample_rate, frequency, gain_db, q, filter_
     else:
         raise ValueError(f"Unsupported filter response type: {filter_type}")
 
-    # Pure python biquad response calculation
     return _calc_response_magnitude(frequencies, sample_rate, b0, b1, b2, a0, a1, a2)
 
 
@@ -149,7 +153,7 @@ def estimate_peak_filter_gain_db(
         spatial_peak = 1.0 + cross_gain * 0.5
         spatial_gain_db = 20.0 * math.log10(spatial_peak)
     elif vst_mode:
-        # Conservative margin for inter-band resonance in VST mode
+        # Margin for inter-band resonance in VST mode
         spatial_gain_db = 0.5
 
     return peak_gain_db + spatial_gain_db
@@ -166,7 +170,12 @@ def generate_apo_config(
     is_headphone=False,
     vst_plugins=None,
 ):
-    """Generate Equalizer APO filters for a profile with strict APO-only vs VST mode separation."""
+    """
+    Generate Equalizer APO configuration.
+    In VST Mode: SoniqMaxDSP.dll is the Single Source of Truth for all audio processing.
+    Zero duplicate EQ, Preamp, or Filter directives are emitted in APO.
+    In APO-Only Mode: Emits static biquad filters and preamp as fallback.
+    """
     if not isinstance(preset_name, str) or not preset_name.strip():
         raise ValueError("Preset name must be a non-empty string.")
     if any(character in preset_name for character in "\r\n"):
@@ -194,30 +203,51 @@ def generate_apo_config(
         f"# SONIQ MAX profile: {preset_name}",
         f"# Output mode: {device_tag}",
     ]
+
     if is_vst_mode:
+        # VST is the Single Source of Truth for ALL audio processing
         lines.extend([
-            "# Engine mode: Equalizer APO + Native VST DSP Engine",
-            "# 10-band EQ & preamp in APO; Bass exciter, Clarity, Spatial, and Limiter managed by VST.",
+            "# Engine mode: Equalizer APO (VST Host Only) · Native SONIQ MAX VST Engine",
+            "# All 10-band EQ, Preamp, Harmonic Bass, Clarity, Spatial, and Limiter processing",
+            "# are executed exclusively inside the native 64-bit VST DSP engine.",
             "",
+            "# Native VST Plugin Processing",
         ])
+        norm_bass = max(0.0, min(1.0, float(bass_boost)))
+        norm_clarity = max(0.0, min(1.0, float(clarity)))
+        norm_spatial = max(0.0, min(1.0, (float(spatial_width) - 1.0) / 1.5))
+        norm_limiter = 1.0
+        norm_master = 1.0
+        speaker_hpf_val = 0.0 if is_headphone else 1.0
+
+        eq_tokens = " ".join([
+            f"EQ{token} {gain:+.1f}"
+            for token, gain in zip(EQ_FREQ_TOKENS, eq_gains)
+        ])
+
+        for plugin in vst_plugins:
+            lines.append(
+                f'VSTPlugin: Library "{plugin}" Bass {norm_bass:.4f} Clarity {norm_clarity:.4f} '
+                f'Spatial {norm_spatial:.4f} Limiter {norm_limiter:.1f} MasterGain {norm_master:.4f} '
+                f'Preamp {preamp:+.1f} EQEnable 1.0 BassEnable 1.0 ClarityEnable 1.0 SpatialEnable 1.0 '
+                f'{eq_tokens} SpeakerHPF {speaker_hpf_val:.1f}'
+            )
     else:
+        # APO-only fallback mode: static biquad approximations and software preamp
         lines.extend([
             "# Static EQ with estimated peak headroom compensation; no dynamic limiter or compressor.",
             "",
         ])
+        if not is_headphone:
+            lines.extend(("# Low-frequency high-pass filter (120 Hz)", "Filter: ON HP Fc 120 Hz", ""))
+        else:
+            lines.extend(("# Headphone mode: no speaker high-pass filter", ""))
 
-    if not is_headphone:
-        lines.extend(("# Low-frequency high-pass filter (120 Hz)", "Filter: ON HP Fc 120 Hz", ""))
-    else:
-        lines.extend(("# Headphone mode: no speaker high-pass filter", ""))
+        lines.extend(("# Output level trim", f"Preamp: {preamp:+.1f} dB", "", "# 10-band parametric EQ"))
+        for frequency, gain in zip(EQ_FREQUENCIES, eq_gains):
+            if abs(gain) > 0.1:
+                lines.append(f"Filter: ON PK Fc {frequency} Hz Gain {gain:+.1f} dB Q 1.41")
 
-    lines.extend(("# Output level trim", f"Preamp: {preamp:+.1f} dB", "", "# 10-band parametric EQ"))
-    for frequency, gain in zip(EQ_FREQUENCIES, eq_gains):
-        if abs(gain) > 0.1:
-            lines.append(f"Filter: ON PK Fc {frequency} Hz Gain {gain:+.1f} dB Q 1.41")
-
-    if not is_vst_mode:
-        # APO-only mode: static biquad approximations
         if bass_boost > 0.01:
             bass_db = bass_boost * 6.0
             lines.extend((
@@ -246,24 +276,6 @@ def generate_apo_config(
                 f"# Stereo channel mix (width control {spatial_width:.2f}x; no Haas delay)",
                 f"Copy: L={direct_gain:.2f}*L+-{cross_gain:.2f}*R R={direct_gain:.2f}*R+-{cross_gain:.2f}*L",
             ))
-    else:
-        # VST mode: SoniqMaxDSP.dll handles harmonic bass, clarity, spatializer, and limiter.
-        # Zero duplicate processing in APO!
-        lines.extend((
-            "",
-            "# Native VST Plugin Processing",
-        ))
-        norm_bass = max(0.0, min(1.0, float(bass_boost)))
-        norm_clarity = max(0.0, min(1.0, float(clarity)))
-        norm_spatial = max(0.0, min(1.0, (float(spatial_width) - 1.0) / 1.5))
-        norm_limiter = 1.0
-        norm_master = 1.0
-
-        for plugin in vst_plugins:
-            lines.append(
-                f'VSTPlugin: Library "{plugin}" Bass {norm_bass:.4f} Clarity {norm_clarity:.4f} '
-                f'Spatial {norm_spatial:.4f} Limiter {norm_limiter:.1f} MasterGain {norm_master:.4f}'
-            )
 
     if night_mode:
         lines.extend(("", "# Night mode is a static 2 dB output trim, not dynamic compression."))
@@ -305,120 +317,69 @@ def _atomic_write(path, content):
         raise
 
 
-def export_to_file(filepath, content):
-    """Atomically write a local generated config file."""
-    _atomic_write(filepath, content)
-    return filepath
+def export_to_file(path, content):
+    """Export configuration directly to a local target file."""
+    _atomic_write(path, content)
+
+
+def _ensure_managed_include(main_config_content, managed_config_name):
+    include_line = f"Include: {managed_config_name}"
+    escaped_name = re.escape(managed_config_name)
+    pattern = re.compile(rf"^\s*Include:\s*{escaped_name}\s*$", re.IGNORECASE | re.MULTILINE)
+    if pattern.search(main_config_content):
+        return main_config_content
+
+    header = "" if main_config_content.endswith("\n") or not main_config_content else "\n"
+    managed_block = (
+        f"{header}{MANAGED_INCLUDE_MARKER}\n"
+        f"{include_line}\n"
+    )
+    return main_config_content + managed_block
+
+
+def _install_apo_config_unlocked(main_config_path, soniq_config_content):
+    main_dir = os.path.dirname(os.path.abspath(main_config_path))
+    if not os.path.isdir(main_dir):
+        raise FileNotFoundError(f"Equalizer APO config directory does not exist: {main_dir}")
+
+    managed_path = os.path.join(main_dir, MANAGED_CONFIG_NAME)
+
+    # Avoid redundant disk writes if the managed file is already identical
+    if os.path.isfile(managed_path):
+        try:
+            with open(managed_path, "r", encoding="utf-8") as existing_file:
+                if existing_file.read() == soniq_config_content:
+                    # Content is already identical; verify main include and return
+                    if os.path.isfile(main_config_path):
+                        with open(main_config_path, "r", encoding="utf-8") as mf:
+                            if re.search(rf"^\s*Include:\s*{re.escape(MANAGED_CONFIG_NAME)}\s*$", mf.read(), re.IGNORECASE | re.MULTILINE):
+                                return managed_path
+        except Exception:
+            pass
+
+    _atomic_write(managed_path, soniq_config_content)
+
+    if os.path.isfile(main_config_path):
+        with open(main_config_path, "r", encoding="utf-8") as stream:
+            main_content = stream.read()
+    else:
+        main_content = ""
+
+    updated_main = _ensure_managed_include(main_content, MANAGED_CONFIG_NAME)
+    if updated_main != main_content:
+        _atomic_write(main_config_path, updated_main)
+
+    return managed_path
 
 
 @contextmanager
-def _process_config_lock(config_dir, timeout=30.0):
-    """Serialize managed-config changes across SONIQ processes."""
-    lock_path = os.path.join(config_dir, ".soniq_max_config.lock")
-    lock_file = open(lock_path, "a+b")
-    acquired = False
+def config_write_lock():
+    """Acquire the shared configuration lock for safe concurrent updates."""
     with _CONFIG_WRITE_LOCK:
-        try:
-            lock_file.seek(0, os.SEEK_END)
-            if lock_file.tell() == 0:
-                lock_file.write(b"\0")
-                lock_file.flush()
-
-            deadline = time.monotonic() + timeout
-            while True:
-                lock_file.seek(0)
-                try:
-                    if os.name == "nt":
-                        import msvcrt
-
-                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
-                    else:
-                        import fcntl
-
-                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    acquired = True
-                    break
-                except (OSError, BlockingIOError):
-                    if time.monotonic() >= deadline:
-                        raise TimeoutError(
-                            f"Timed out waiting for SONIQ config lock: {lock_path}"
-                        )
-                    time.sleep(0.05)
-
-            yield
-        finally:
-            if acquired:
-                lock_file.seek(0)
-                if os.name == "nt":
-                    import msvcrt
-
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    import fcntl
-
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
-            lock_file.close()
+        yield
 
 
-def install_apo_config(config_path, content, managed_name=MANAGED_CONFIG_NAME):
-    """Write managed filters under a process-safe lock; preserve user config."""
-    config_dir = os.path.dirname(os.path.abspath(config_path))
-    if not os.path.isdir(config_dir):
-        raise FileNotFoundError(f"Equalizer APO config directory does not exist: {config_dir}")
-    with _process_config_lock(config_dir):
-        return _install_apo_config_unlocked(config_path, content, managed_name)
-
-
-def _install_apo_config_unlocked(config_path, content, managed_name):
-    """Write SONIQ's managed config and add an idempotent Include to APO config."""
-    if (
-        not isinstance(managed_name, str)
-        or "/" in managed_name
-        or "\\" in managed_name
-        or managed_name in ("", ".", "..")
-    ):
-        raise ValueError("Managed config name must be a simple file name.")
-
-    config_dir = os.path.dirname(os.path.abspath(config_path))
-    if not os.path.isdir(config_dir):
-        raise FileNotFoundError(f"Equalizer APO config directory does not exist: {config_dir}")
-
-    managed_path = os.path.join(config_dir, managed_name)
-    existing_content = None
-    if os.path.isfile(managed_path):
-        try:
-            with open(managed_path, "r", encoding="utf-8") as stream:
-                existing_content = stream.read()
-        except OSError:
-            pass
-
-    # Avoid rewriting unchanged configuration files
-    if existing_content != content:
-        _atomic_write(managed_path, content)
-
-    if os.path.exists(config_path):
-        with open(config_path, "r", encoding="utf-8", newline="") as stream:
-            original = stream.read()
-    else:
-        original = ""
-
-    target_name = os.path.basename(managed_path).casefold()
-    include_exists = False
-    include_pattern = re.compile(r"^\s*Include\s*:\s*[\"']?([^\"']+)", re.IGNORECASE)
-    for line in original.splitlines():
-        match = include_pattern.match(line)
-        if match:
-            include_target = match.group(1).strip().replace("\\", "/").casefold()
-            if os.path.basename(include_target) == target_name:
-                include_exists = True
-                break
-
-    if not include_exists:
-        separator = "" if not original or original.endswith(("\n", "\r")) else "\n"
-        original = (
-            f"{original}{separator}\n{MANAGED_INCLUDE_MARKER}\n"
-            f"Include: {managed_name}\n"
-        )
-        _atomic_write(config_path, original)
-
-    return managed_path
+def install_apo_config(main_config_path, soniq_config_content):
+    """Thread-safe and process-safe install of the SONIQ MAX configuration into Equalizer APO."""
+    with config_write_lock():
+        return _install_apo_config_unlocked(main_config_path, soniq_config_content)

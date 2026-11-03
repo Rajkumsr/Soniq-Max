@@ -229,8 +229,8 @@ class ApoConfigTests(unittest.TestCase):
         self.assertIn("Limiter 1.0", config)
 
     def test_vst_mode_eliminates_duplicate_processing(self):
-        # In VST mode, SoniqMaxDSP owns bass, clarity, and spatial processing.
-        # Static APO approximations must be completely omitted to prevent double-filtering!
+        # In VST mode, SoniqMaxDSP owns all 10-band EQ, Preamp, bass, clarity, and spatial processing.
+        # All duplicate APO filters and preamps must be completely omitted to prevent double-filtering!
         config = generate_apo_config(
             "VST Mode No Duplication",
             [2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0],
@@ -240,13 +240,20 @@ class ApoConfigTests(unittest.TestCase):
             volume_boost_db=4.0,
             vst_plugins=["VSTPlugins\\SoniqMaxDSP.dll"]
         )
-        # 10-band EQ MUST be present in APO
-        self.assertIn("Filter: ON PK Fc 32 Hz Gain +2.0 dB", config)
-        self.assertIn("Filter: ON PK Fc 16000 Hz Gain +3.0 dB", config)
-        # VST directive MUST be present with normalized parameters
+        # Duplicate EQ, Preamp, and HP filters MUST NOT be present in APO
+        self.assertNotIn("Filter: ON PK", config)
+        self.assertNotIn("Preamp: ", config)
+        self.assertNotIn("Filter: ON HP", config)
+
+        # VST directive MUST be present with complete parameter set
         self.assertIn('VSTPlugin: Library "VSTPlugins\\SoniqMaxDSP.dll"', config)
         self.assertIn("Bass 0.7500", config)
         self.assertIn("Clarity 0.8500", config)
+        self.assertIn("EQ32Hz +2.0", config)
+        self.assertIn("EQ16kHz +3.0", config)
+        self.assertIn("Preamp ", config)
+        self.assertIn("EQEnable 1.0", config)
+        self.assertIn("SpeakerHPF 1.0", config)
 
         # Static tone shaping MUST be omitted (no duplicate processing!)
         self.assertNotIn("Filter: ON LSC 6 dB Fc 200 Hz", config)
