@@ -486,3 +486,4 @@ public:
 };
 
 } // namespace SoniqAudio
+
