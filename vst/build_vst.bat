@@ -95,7 +95,7 @@ goto :INSTALL
 :COMPILE_GCC
 echo [FOUND] GNU C++ Compiler [g++]
 echo Compiling SoniqMaxDSP.dll [64-bit]...
-g++ -O3 -shared -std=c++17 -Isrc -o "%OUT%" "%SRC%" -static-libgcc -static-libstdc++ -Wl,--kill-at
+g++ -O3 -shared -std=c++17 -Isrc -o "%OUT%" "%SRC%" -static -static-libgcc -static-libstdc++ -Wl,--kill-at
 goto :INSTALL
 
 :COMPILE_CLANG

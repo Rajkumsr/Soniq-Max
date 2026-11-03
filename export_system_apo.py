@@ -12,9 +12,6 @@ import tempfile
 import threading
 import time
 from contextlib import contextmanager
-
-
-
 from constants import validate_profile_data
 
 
@@ -81,9 +78,6 @@ def _response_magnitude(frequencies, sample_rate, frequency, gain_db, q, filter_
         raise ValueError(f"Unsupported filter response type: {filter_type}")
 
     # Pure python biquad response calculation
-
-
-
     return _calc_response_magnitude(frequencies, sample_rate, b0, b1, b2, a0, a1, a2)
 
 
