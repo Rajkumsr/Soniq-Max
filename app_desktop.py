@@ -873,6 +873,10 @@ class SoniqDesktopApp(ctk.CTk):
             active_vst = self.get_active_vst_path()
             if active_vst:
                 vst_plugins = [active_vst]
+            else:
+                logger.info("VST enabled but DLL not found; using safe APO-only filter fallback.")
+        else:
+            logger.info("Operating in APO-only filter mode (VST disabled by user).")
 
         if not self.is_enhanced:
             apo_text = "# SONIQ MAX: BYPASSED (other APO config remains active)\nPreamp: 0.0 dB\n"

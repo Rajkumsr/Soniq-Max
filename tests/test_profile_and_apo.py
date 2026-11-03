@@ -1,6 +1,7 @@
 import copy
 import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -223,6 +224,68 @@ class ApoConfigTests(unittest.TestCase):
         )
         self.assertIn("# Native VST Plugin Processing", config)
         self.assertIn('VSTPlugin: Library "VSTPlugins\\SoniqMaxDSP.dll"', config)
+        self.assertIn("Bass 0.5000", config)
+        self.assertIn("Clarity 0.5000", config)
+        self.assertIn("Limiter 1.0", config)
+
+    def test_vst_mode_eliminates_duplicate_processing(self):
+        # In VST mode, SoniqMaxDSP owns bass, clarity, and spatial processing.
+        # Static APO approximations must be completely omitted to prevent double-filtering!
+        config = generate_apo_config(
+            "VST Mode No Duplication",
+            [2.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 2.0, 3.0],
+            bass_boost=0.75,
+            clarity=0.85,
+            spatial_width=1.65,
+            volume_boost_db=4.0,
+            vst_plugins=["VSTPlugins\\SoniqMaxDSP.dll"]
+        )
+        # 10-band EQ MUST be present in APO
+        self.assertIn("Filter: ON PK Fc 32 Hz Gain +2.0 dB", config)
+        self.assertIn("Filter: ON PK Fc 16000 Hz Gain +3.0 dB", config)
+        # VST directive MUST be present with normalized parameters
+        self.assertIn('VSTPlugin: Library "VSTPlugins\\SoniqMaxDSP.dll"', config)
+        self.assertIn("Bass 0.7500", config)
+        self.assertIn("Clarity 0.8500", config)
+
+        # Static tone shaping MUST be omitted (no duplicate processing!)
+        self.assertNotIn("Filter: ON LSC 6 dB Fc 200 Hz", config)
+        self.assertNotIn("Filter: ON PK Fc 150 Hz", config)
+        self.assertNotIn("Filter: ON PK Fc 2800 Hz", config)
+        self.assertNotIn("Filter: ON HSC 6 dB Fc 7000 Hz", config)
+        self.assertNotIn("Copy: L=", config)
+
+    def test_apo_only_mode_preserves_static_tone_shaping(self):
+        # In APO-only mode (vst_plugins=None), static approximations are active
+        config = generate_apo_config(
+            "APO Only Mode",
+            [0.0] * 10,
+            bass_boost=0.75,
+            clarity=0.85,
+            spatial_width=1.65,
+            volume_boost_db=4.0,
+            vst_plugins=None
+        )
+        self.assertIn("Filter: ON LSC 6 dB Fc 200 Hz", config)
+        self.assertIn("Filter: ON PK Fc 150 Hz", config)
+        self.assertIn("Filter: ON PK Fc 2800 Hz", config)
+        self.assertIn("Filter: ON HSC 6 dB Fc 7000 Hz", config)
+        self.assertIn("Copy: L=", config)
+        self.assertNotIn("VSTPlugin: Library", config)
+
+    def test_install_avoids_unnecessary_rewrites(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            main_config = os.path.join(temp_dir, "config.txt")
+            content = "Preamp: -1.0 dB\n"
+            managed_path = install_apo_config(main_config, content)
+            initial_mtime = os.path.getmtime(managed_path)
+
+            time.sleep(0.05)
+            # Re-install identical content
+            install_apo_config(main_config, content)
+            second_mtime = os.path.getmtime(managed_path)
+
+            self.assertEqual(initial_mtime, second_mtime)
 
     def test_install_creates_main_config_without_replacing_managed_file(self):
         with tempfile.TemporaryDirectory() as temp_dir:

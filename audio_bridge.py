@@ -33,9 +33,11 @@ effGetEffectName = 45
 # SoniqMaxDSP Parameter Indices
 PARAM_BASS_BOOST = 0     # 0.0 - 1.0 (Harmonic Bass Exciter)
 PARAM_CLARITY = 1        # 0.0 - 1.0 (Vocal Formant Clarity)
-PARAM_SPATIAL = 2        # 0.0 - 1.0 (3D Haas Spatializer)
-PARAM_LIMITER = 3        # 0.0 or 1.0 (Peak Soft-Knee Limiter)
-PARAM_MASTER_GAIN = 4    # 0.0 - 2.0 (Output Gain Multiplier, default 1.0)
+PARAM_SPATIAL = 2        # 0.0 - 1.0 (3D Spatializer)
+PARAM_LIMITER = 3        # 0.0 or 1.0 (Lookahead Peak Limiter)
+PARAM_MASTER_GAIN = 4    # 0.0 - 4.0 (Output Gain Multiplier, default 1.0)
+PARAM_SPATIAL_MODE = 5   # 0.0 = Mid/Side Stereo, 1.0 = HRTF Binaural
+PARAM_CEILING = 6        # Limiter Ceiling Linear (default 0.9772 = -0.2 dBFS)
 
 
 # Ctypes VST Structures
@@ -393,6 +395,7 @@ class AudioBridge:
                 self.vst_engine.set_param(PARAM_SPATIAL, self.param_spatial)
                 self.vst_engine.set_param(PARAM_LIMITER, self.param_limiter)
                 self.vst_engine.set_param(PARAM_MASTER_GAIN, self.param_volume)
+                self.vst_engine.set_param(PARAM_SPATIAL_MODE, 1.0 if is_headphone else 0.0)
 
     def _audio_callback(self, indata, outdata, frames, time_info, status):
         """

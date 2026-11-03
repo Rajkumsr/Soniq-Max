@@ -3,6 +3,8 @@ Equalizer APO configuration generation and safe SONIQ MAX installation.
 
 SONIQ MAX writes its filters to a separate managed file and includes that file
 from Equalizer APO's main config, preserving existing user configuration.
+Provides strict separation between APO-only filter mode and Native VST DSP mode
+with zero duplicate processing and conservative headroom management.
 """
 import cmath
 import math
@@ -86,8 +88,10 @@ def _apply_response_mags(response, mags):
         response[i] *= m
 
 
-def estimate_peak_filter_gain_db(eq_gains, bass_boost, clarity, spatial_width, is_headphone=False):
-    """Estimate the maximum combined static-filter gain across common device rates."""
+def estimate_peak_filter_gain_db(
+    eq_gains, bass_boost, clarity, spatial_width, is_headphone=False, vst_mode=False
+):
+    """Estimate the maximum combined filter gain across common device rates."""
     if not isinstance(eq_gains, (list, tuple)) or len(eq_gains) != len(EQ_FREQUENCIES):
         raise ValueError(f"EQ must contain exactly {len(EQ_FREQUENCIES)} gains.")
     for gain in eq_gains:
@@ -97,6 +101,8 @@ def estimate_peak_filter_gain_db(eq_gains, bass_boost, clarity, spatial_width, i
     _validate_number("Stereo width", spatial_width, 1, 2.5)
     if type(is_headphone) is not bool:
         raise ValueError("is_headphone must be a boolean value.")
+    if type(vst_mode) is not bool:
+        raise ValueError("vst_mode must be a boolean value.")
 
     peak_gain_db = 0.0
     for sample_rate in (44100, 48000, 96000):
@@ -110,36 +116,42 @@ def estimate_peak_filter_gain_db(eq_gains, bass_boost, clarity, spatial_width, i
                     frequencies, sample_rate, frequency, gain, 1.41, "peak"
                 ))
 
-        if bass_boost > 0.01:
-            bass_gain = bass_boost * 6.0
-            _apply_response_mags(response, _response_magnitude(
-                frequencies, sample_rate, 150.0, bass_gain, 1.2, "peak"
-            ))
-            _apply_response_mags(response, _response_magnitude(
-                frequencies, sample_rate, 200.0, bass_gain * 0.6, 1.0, "low_shelf"
-            ))
-
-        if clarity > 0.01:
-            clarity_gain = clarity * 4.5
-            _apply_response_mags(response, _response_magnitude(
-                frequencies, sample_rate, 2800.0, clarity_gain, 1.5, "peak"
-            ))
-            _apply_response_mags(response, _response_magnitude(
-                frequencies, sample_rate, 7000.0, clarity_gain * 0.7, 1.0, "high_shelf"
-            ))
-            if not is_headphone:
+        if not vst_mode:
+            # Static APO tone shaping filters (only active in APO-only mode)
+            if bass_boost > 0.01:
+                bass_gain = bass_boost * 6.0
                 _apply_response_mags(response, _response_magnitude(
-                    frequencies, sample_rate, 320.0, -2.5, 2.0, "peak"
+                    frequencies, sample_rate, 150.0, bass_gain, 1.2, "peak"
                 ))
+                _apply_response_mags(response, _response_magnitude(
+                    frequencies, sample_rate, 200.0, bass_gain * 0.6, 1.0, "low_shelf"
+                ))
+
+            if clarity > 0.01:
+                clarity_gain = clarity * 4.5
+                _apply_response_mags(response, _response_magnitude(
+                    frequencies, sample_rate, 2800.0, clarity_gain, 1.5, "peak"
+                ))
+                _apply_response_mags(response, _response_magnitude(
+                    frequencies, sample_rate, 7000.0, clarity_gain * 0.7, 1.0, "high_shelf"
+                ))
+                if not is_headphone:
+                    _apply_response_mags(response, _response_magnitude(
+                        frequencies, sample_rate, 320.0, -2.5, 2.0, "peak"
+                    ))
 
         max_magnitude = max(1.0, max(response))
         peak_gain_db = max(peak_gain_db, 20.0 * math.log10(max_magnitude))
 
-    cross_gain = 0.0
-    if spatial_width > 1.05:
+    spatial_gain_db = 0.0
+    if not vst_mode and spatial_width > 1.05:
         cross_gain = min(0.18, max(0.04, (spatial_width - 1.0) * 0.18))
-    spatial_peak = 1.0 + cross_gain * 0.5
-    spatial_gain_db = 20.0 * math.log10(spatial_peak)
+        spatial_peak = 1.0 + cross_gain * 0.5
+        spatial_gain_db = 20.0 * math.log10(spatial_peak)
+    elif vst_mode:
+        # Conservative margin for inter-band resonance in VST mode
+        spatial_gain_db = 0.5
+
     return peak_gain_db + spatial_gain_db
 
 
@@ -154,7 +166,7 @@ def generate_apo_config(
     is_headphone=False,
     vst_plugins=None,
 ):
-    """Generate Equalizer APO filters for a profile."""
+    """Generate Equalizer APO filters for a profile with strict APO-only vs VST mode separation."""
     if not isinstance(preset_name, str) or not preset_name.strip():
         raise ValueError("Preset name must be a non-empty string.")
     if any(character in preset_name for character in "\r\n"):
@@ -170,18 +182,29 @@ def generate_apo_config(
     if type(night_mode) is not bool or type(is_headphone) is not bool:
         raise ValueError("night_mode and is_headphone must be boolean values.")
 
+    is_vst_mode = bool(vst_plugins)
     effective_boost = volume_boost_db - (2.0 if night_mode else 0.0)
     estimated_peak_gain = estimate_peak_filter_gain_db(
-        eq_gains, bass_boost, clarity, spatial_width, is_headphone
+        eq_gains, bass_boost, clarity, spatial_width, is_headphone, vst_mode=is_vst_mode
     )
     preamp = min(4.0, effective_boost - estimated_peak_gain)
     device_tag = "Headphones" if is_headphone else "Speakers"
+
     lines = [
         f"# SONIQ MAX profile: {preset_name}",
         f"# Output mode: {device_tag}",
-        "# Static EQ with estimated peak headroom compensation; no dynamic limiter or compressor.",
-        "",
     ]
+    if is_vst_mode:
+        lines.extend([
+            "# Engine mode: Equalizer APO + Native VST DSP Engine",
+            "# 10-band EQ & preamp in APO; Bass exciter, Clarity, Spatial, and Limiter managed by VST.",
+            "",
+        ])
+    else:
+        lines.extend([
+            "# Static EQ with estimated peak headroom compensation; no dynamic limiter or compressor.",
+            "",
+        ])
 
     if not is_headphone:
         lines.extend(("# Low-frequency high-pass filter (120 Hz)", "Filter: ON HP Fc 120 Hz", ""))
@@ -193,42 +216,57 @@ def generate_apo_config(
         if abs(gain) > 0.1:
             lines.append(f"Filter: ON PK Fc {frequency} Hz Gain {gain:+.1f} dB Q 1.41")
 
-    if bass_boost > 0.01:
-        bass_db = bass_boost * 6.0
-        lines.extend((
-            "",
-            "# Bass tone shaping (static EQ; does not synthesize harmonics)",
-            f"Filter: ON LSC 6 dB Fc 200 Hz Gain {bass_db * 0.6:+.1f} dB",
-            f"Filter: ON PK Fc 150 Hz Gain {bass_db:+.1f} dB Q 1.2",
-        ))
+    if not is_vst_mode:
+        # APO-only mode: static biquad approximations
+        if bass_boost > 0.01:
+            bass_db = bass_boost * 6.0
+            lines.extend((
+                "",
+                "# Bass tone shaping (static EQ; does not synthesize harmonics)",
+                f"Filter: ON LSC 6 dB Fc 200 Hz Gain {bass_db * 0.6:+.1f} dB",
+                f"Filter: ON PK Fc 150 Hz Gain {bass_db:+.1f} dB Q 1.2",
+            ))
 
-    if clarity > 0.01:
-        clarity_db = clarity * 4.5
-        lines.extend((
-            "",
-            "# Vocal-presence and high-shelf EQ",
-            f"Filter: ON PK Fc 2800 Hz Gain {clarity_db:+.1f} dB Q 1.5",
-            f"Filter: ON HSC 6 dB Fc 7000 Hz Gain {clarity_db * 0.7:+.1f} dB",
-        ))
-        if not is_headphone:
-            lines.append("Filter: ON PK Fc 320 Hz Gain -2.5 dB Q 2.0")
+        if clarity > 0.01:
+            clarity_db = clarity * 4.5
+            lines.extend((
+                "",
+                "# Vocal-presence and high-shelf EQ",
+                f"Filter: ON PK Fc 2800 Hz Gain {clarity_db:+.1f} dB Q 1.5",
+                f"Filter: ON HSC 6 dB Fc 7000 Hz Gain {clarity_db * 0.7:+.1f} dB",
+            ))
+            if not is_headphone:
+                lines.append("Filter: ON PK Fc 320 Hz Gain -2.5 dB Q 2.0")
 
-    if spatial_width > 1.05:
-        cross_gain = min(0.18, max(0.04, (spatial_width - 1.0) * 0.18))
-        direct_gain = max(0.80, 1.0 - cross_gain * 0.5)
+        if spatial_width > 1.05:
+            cross_gain = min(0.18, max(0.04, (spatial_width - 1.0) * 0.18))
+            direct_gain = max(0.80, 1.0 - cross_gain * 0.5)
+            lines.extend((
+                "",
+                f"# Stereo channel mix (width control {spatial_width:.2f}x; no Haas delay)",
+                f"Copy: L={direct_gain:.2f}*L+-{cross_gain:.2f}*R R={direct_gain:.2f}*R+-{cross_gain:.2f}*L",
+            ))
+    else:
+        # VST mode: SoniqMaxDSP.dll handles harmonic bass, clarity, spatializer, and limiter.
+        # Zero duplicate processing in APO!
         lines.extend((
             "",
-            f"# Stereo channel mix (width control {spatial_width:.2f}x; no Haas delay)",
-            f"Copy: L={direct_gain:.2f}*L+-{cross_gain:.2f}*R R={direct_gain:.2f}*R+-{cross_gain:.2f}*L",
+            "# Native VST Plugin Processing",
         ))
+        norm_bass = max(0.0, min(1.0, float(bass_boost)))
+        norm_clarity = max(0.0, min(1.0, float(clarity)))
+        norm_spatial = max(0.0, min(1.0, (float(spatial_width) - 1.0) / 1.5))
+        norm_limiter = 1.0
+        norm_master = 1.0
+
+        for plugin in vst_plugins:
+            lines.append(
+                f'VSTPlugin: Library "{plugin}" Bass {norm_bass:.4f} Clarity {norm_clarity:.4f} '
+                f'Spatial {norm_spatial:.4f} Limiter {norm_limiter:.1f} MasterGain {norm_master:.4f}'
+            )
 
     if night_mode:
         lines.extend(("", "# Night mode is a static 2 dB output trim, not dynamic compression."))
-
-    if vst_plugins:
-        lines.extend(("", "# Native VST Plugin Processing"))
-        for plugin in vst_plugins:
-            lines.append(f'VSTPlugin: Library "{plugin}"')
 
     return "\n".join(lines) + "\n"
 
@@ -346,7 +384,17 @@ def _install_apo_config_unlocked(config_path, content, managed_name):
         raise FileNotFoundError(f"Equalizer APO config directory does not exist: {config_dir}")
 
     managed_path = os.path.join(config_dir, managed_name)
-    _atomic_write(managed_path, content)
+    existing_content = None
+    if os.path.isfile(managed_path):
+        try:
+            with open(managed_path, "r", encoding="utf-8") as stream:
+                existing_content = stream.read()
+        except OSError:
+            pass
+
+    # Avoid rewriting unchanged configuration files
+    if existing_content != content:
+        _atomic_write(managed_path, content)
 
     if os.path.exists(config_path):
         with open(config_path, "r", encoding="utf-8", newline="") as stream:

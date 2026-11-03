@@ -168,6 +168,41 @@ class SettingsTab(ctk.CTkFrame):
         )
         apo_desc.pack(anchor="w", padx=12, pady=(10, 6))
 
+        # APO VST DSP Mode Toggle Row
+        vst_apo_row = ctk.CTkFrame(self.box_apo, fg_color="transparent")
+        vst_apo_row.pack(fill="x", padx=12, pady=(0, 10))
+
+        self.switch_vst_apo = ctk.CTkSwitch(
+            vst_apo_row,
+            text="Enable Native VST Processing",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=THEME["text_main"],
+            progress_color=THEME["accent_green"],
+            command=self.controller.toggle_vst
+        )
+        self.switch_vst_apo.pack(side="left", padx=(0, 12))
+        FluentTooltip(self.switch_vst_apo, title="Toggle VST Processing", text="When ON: VST owns harmonics, clarity, spatializer, and limiter with zero duplicate filters. When OFF: falls back cleanly to APO-only filters.")
+
+        self.vst_status_lbl_apo = ctk.CTkLabel(
+            vst_apo_row, text="✓ Active (SoniqMaxDSP.dll)",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            text_color=THEME["accent_green"]
+        )
+        self.vst_status_lbl_apo.pack(side="left", padx=(0, 12))
+
+        self.btn_compile_vst_apo = ctk.CTkButton(
+            vst_apo_row,
+            text="🔨 Recompile VST",
+            font=ctk.CTkFont(family="Segoe UI", size=11),
+            fg_color=THEME["btn_secondary"],
+            text_color=THEME["accent_gold"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["card_border"],
+            command=self.controller.build_vst_plugin
+        )
+        self.btn_compile_vst_apo.pack(side="left")
+
         apo_btn_row = ctk.CTkFrame(self.box_apo, fg_color="transparent")
         apo_btn_row.pack(fill="x", padx=12, pady=(0, 12))
 
@@ -369,25 +404,30 @@ class SettingsTab(ctk.CTkFrame):
 
     def update_vst_ui(self):
         installed = self.controller.is_vst_installed()
-        if hasattr(self, "vst_status_lbl"):
-            if installed:
-                self.vst_status_lbl.configure(
-                    text="✓ Active (SoniqMaxDSP.dll)",
-                    text_color=THEME["accent_green"]
-                )
-                self.btn_compile_vst.configure(text="🔨 Recompile VST")
-            else:
-                self.vst_status_lbl.configure(
-                    text="⚡ Source Ready (vst/src/)",
-                    text_color=THEME["accent_bronze"]
-                )
-                self.btn_compile_vst.configure(text="🔨 Compile VST")
+        use_vst = getattr(self.controller, "use_vst", True)
 
-        if hasattr(self, "switch_vst"):
-            if getattr(self.controller, "use_vst", True) and installed:
-                self.switch_vst.select()
-            else:
-                self.switch_vst.deselect()
+        status_text = "✓ Active (SoniqMaxDSP.dll)" if (installed and use_vst) else (
+            "○ Bypassed (APO Filters Mode)" if installed else "⚡ Source Ready (vst/src/)"
+        )
+        status_color = THEME["accent_green"] if (installed and use_vst) else (
+            THEME["accent_gold"] if installed else THEME["accent_bronze"]
+        )
+        btn_text = "🔨 Recompile VST" if installed else "🔨 Compile VST"
+
+        for lbl in (getattr(self, "vst_status_lbl", None), getattr(self, "vst_status_lbl_apo", None)):
+            if lbl:
+                lbl.configure(text=status_text, text_color=status_color)
+
+        for btn in (getattr(self, "btn_compile_vst", None), getattr(self, "btn_compile_vst_apo", None)):
+            if btn:
+                btn.configure(text=btn_text)
+
+        for sw in (getattr(self, "switch_vst", None), getattr(self, "switch_vst_apo", None)):
+            if sw:
+                if use_vst and installed:
+                    sw.select()
+                else:
+                    sw.deselect()
 
     def animate_staggered_entrance(self):
         """Sequential waterfall entrance for Settings view."""
