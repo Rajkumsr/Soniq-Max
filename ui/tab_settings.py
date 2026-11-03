@@ -54,7 +54,7 @@ class SettingsTab(ctk.CTkFrame):
 
         self.seg_engine = ctk.CTkSegmentedButton(
             sel_row,
-            values=["🚀 Direct Soniq Engine (No APO)", "🛠️ Equalizer APO Driver (Legacy)"],
+            values=["🛠️ Equalizer APO Driver (Native VST)", "🚀 Direct Soniq Engine (No APO)"],
             command=self.on_engine_mode_selected,
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             selected_color=THEME["accent_green"],
@@ -159,7 +159,11 @@ class SettingsTab(ctk.CTkFrame):
 
         apo_desc = ctk.CTkLabel(
             self.box_apo,
-            text=f"Equalizer APO main config: {APO_DEFAULT_PATH}\nSONIQ MAX writes a managed filter file and adds an Include line to config.txt.",
+            text=(
+                f"• System Audio Driver: Equalizer APO ({APO_DEFAULT_PATH})\n"
+                "• Native Psychoacoustic DSP: SoniqMaxDSP.dll loaded directly in Realtek audio driver.\n"
+                "• Zero latency, zero virtual audio cables required, works system-wide across all apps & games."
+            ),
             font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
         )
         apo_desc.pack(anchor="w", padx=12, pady=(10, 6))
@@ -335,12 +339,17 @@ class SettingsTab(ctk.CTkFrame):
         self.update_engine_ui()
 
     def on_engine_mode_selected(self, choice):
-        mode = "direct" if "Direct" in choice else "apo"
+        mode = "apo" if "APO" in choice or "Equalizer" in choice else "direct"
         self.controller.set_engine_mode(mode)
 
     def update_engine_ui(self):
-        mode = getattr(self.controller, "engine_mode", "direct")
-        if mode == "direct":
+        mode = getattr(self.controller, "engine_mode", "apo")
+        if mode == "apo":
+            self.seg_engine.set("🛠️ Equalizer APO Driver (Native VST)")
+            self.lbl_engine_badge.configure(text="● EQUALIZER APO ACTIVE", text_color=THEME["accent_green"])
+            self.box_apo.pack(fill="x", padx=16, pady=(0, 12))
+            self.box_direct.pack_forget()
+        else:
             self.seg_engine.set("🚀 Direct Soniq Engine (No APO)")
             self.lbl_engine_badge.configure(text="● DIRECT VST ACTIVE", text_color=THEME["accent_green"])
             self.box_direct.pack(fill="x", padx=16, pady=(0, 12))
@@ -355,11 +364,6 @@ class SettingsTab(ctk.CTkFrame):
             else:
                 flow_text = "Pipeline: Initializing..."
             self.lbl_pipeline_flow.configure(text=flow_text)
-        else:
-            self.seg_engine.set("🛠️ Equalizer APO Driver (Legacy)")
-            self.lbl_engine_badge.configure(text="● APO DRIVER MODE", text_color=THEME["accent_gold"])
-            self.box_apo.pack(fill="x", padx=16, pady=(0, 12))
-            self.box_direct.pack_forget()
 
         self.update_vst_ui()
 

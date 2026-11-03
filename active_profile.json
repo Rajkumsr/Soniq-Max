@@ -4,6 +4,7 @@
   "night_mode": false,
   "auto_app_enabled": true,
   "force_full_range": false,
+  "engine_mode": "apo",
   "sense_profile_assignments": {
     "gaming": "fps_gaming",
     "music": "bass_beast",

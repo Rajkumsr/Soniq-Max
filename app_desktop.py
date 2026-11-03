@@ -159,8 +159,8 @@ class SoniqDesktopApp(ctk.CTk):
         self.sense_profile_assignments = DEFAULT_SENSE_PROFILE_ASSIGNMENTS.copy()
         self.audio_content_monitor = AudioContentMonitor()
 
-        # Audio Pipeline Engine Mode: "direct" (Direct Soniq Engine - No APO) or "apo" (Legacy)
-        self.engine_mode = "direct"
+        # Audio Pipeline Engine Mode: "apo" (Equalizer APO Driver + VST DLL) or "direct" (Direct Soniq Engine)
+        self.engine_mode = "apo"
         self.audio_bridge = None
         try:
             vst_path = self.get_active_vst_path()
@@ -253,9 +253,9 @@ class SoniqDesktopApp(ctk.CTk):
                 else:
                     logger.warning("Ignoring invalid setting '%s' in %s", key, CONFIG_FILE)
 
-            self.engine_mode = data.get("engine_mode", "direct")
+            self.engine_mode = data.get("engine_mode", "apo")
             if self.engine_mode not in ("direct", "apo"):
-                self.engine_mode = "direct"
+                self.engine_mode = "apo"
 
             assignments = data.get("sense_profile_assignments", {})
             if isinstance(assignments, dict):
@@ -298,7 +298,7 @@ class SoniqDesktopApp(ctk.CTk):
             "night_mode": self.night_mode,
             "auto_app_enabled": self.auto_app_enabled,
             "force_full_range": getattr(self, "force_full_range", False),
-            "engine_mode": getattr(self, "engine_mode", "direct"),
+            "engine_mode": getattr(self, "engine_mode", "apo"),
             "sense_profile_assignments": self.sense_profile_assignments,
         }
         try:
@@ -898,10 +898,10 @@ class SoniqDesktopApp(ctk.CTk):
         # 1. Update Direct Soniq Engine in RAM (Instant zero-latency C++ VST dispatch)
         if hasattr(self, "audio_bridge") and self.audio_bridge:
             bridge_profile = {
-                "bass": p.get("bass", 35.0) if enabled_effects["bass"] else 0.0,
-                "clarity": p.get("clarity", 40.0) if enabled_effects["clarity"] else 0.0,
-                "spatial": p.get("spatial", 25.0) if enabled_effects["spatial"] else 0.0,
-                "volume": p.get("volume", 100.0) if enabled_effects["volume"] else 100.0,
+                "bass": profile_values["bass_boost"],
+                "clarity": profile_values["clarity"],
+                "spatial": profile_values["spatial_width"],
+                "volume_db": profile_values["volume_boost_db"],
             }
             self.audio_bridge.update_from_profile(
                 bridge_profile,
@@ -912,7 +912,7 @@ class SoniqDesktopApp(ctk.CTk):
         ep_type = "Headphones / Full-Range" if self.effective_is_headphone else "Laptop Speakers"
 
         # 2. Branch according to active engine mode
-        if getattr(self, "engine_mode", "direct") == "direct":
+        if getattr(self, "engine_mode", "apo") == "direct":
             if self.audio_bridge and not self.audio_bridge.is_running:
                 self.audio_bridge.start()
 
@@ -925,6 +925,8 @@ class SoniqDesktopApp(ctk.CTk):
                 True,
             )
         else:
+            if hasattr(self, "audio_bridge") and self.audio_bridge and self.audio_bridge.is_running:
+                self.audio_bridge.stop()
             config_dir = os.path.dirname(APO_DEFAULT_PATH)
             if not os.path.isdir(config_dir):
                 self.update_apo_health(

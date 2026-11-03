@@ -359,10 +359,32 @@ class AudioBridge:
             self.master_effects_on = master_effects_on
             self.is_headphone = is_headphone
 
-            self.param_bass = float(profile.get("bass", 35.0)) / 100.0
-            self.param_clarity = float(profile.get("clarity", 40.0)) / 100.0
-            self.param_spatial = float(profile.get("spatial", 25.0)) / 100.0
-            self.param_volume = float(profile.get("volume", 100.0)) / 100.0
+            # Bass & clarity: 0.0 - 1.0 (normalize if passed as 0-100 percentage)
+            raw_bass = float(profile.get("bass", 35.0))
+            self.param_bass = raw_bass / 100.0 if raw_bass > 1.0 else raw_bass
+
+            raw_clarity = float(profile.get("clarity", 40.0))
+            self.param_clarity = raw_clarity / 100.0 if raw_clarity > 1.0 else raw_clarity
+
+            raw_spatial = float(profile.get("spatial", 25.0))
+            self.param_spatial = raw_spatial / 100.0 if raw_spatial > 1.0 else raw_spatial
+
+            # Master Gain / Volume calculation:
+            # Handles both decibels (e.g. 5.5 dB boost) and legacy linear/percentage values
+            if "volume_db" in profile:
+                vol_db = float(profile["volume_db"])
+                self.param_volume = 10.0 ** (vol_db / 20.0)
+            elif "volume" in profile:
+                v = float(profile["volume"])
+                if v <= 20.0:
+                    # Decibel boost (e.g. 0.0 dB to 12.0 dB)
+                    self.param_volume = 10.0 ** (v / 20.0)
+                else:
+                    # Percentage / linear scale (e.g. 90.0 -> 0.90)
+                    self.param_volume = v / 100.0
+            else:
+                self.param_volume = 1.0
+
             self.param_limiter = 1.0
 
             if self.vst_engine:
@@ -387,7 +409,7 @@ class AudioBridge:
         peak_in_r = 0.0
 
         if not self.master_effects_on or not self.vst_engine:
-            # Clean bypass: pass through with master volume scaling
+            # Clean bypass: pass through at unity gain (true system passthrough)
             for i in range(n_frames):
                 l_val = float(indata[i, 0])
                 r_val = float(indata[i, 1]) if getattr(indata, "shape", (0, 2))[1] > 1 else l_val
@@ -399,13 +421,13 @@ class AudioBridge:
                 if ar > peak_in_r:
                     peak_in_r = ar
 
-                outdata[i, 0] = l_val * vol
-                outdata[i, 1] = r_val * vol
+                outdata[i, 0] = l_val
+                outdata[i, 1] = r_val
 
             self.peak_in_l = peak_in_l
             self.peak_in_r = peak_in_r
-            self.peak_out_l = peak_in_l * vol
-            self.peak_out_r = peak_in_r * vol
+            self.peak_out_l = peak_in_l
+            self.peak_out_r = peak_in_r
         else:
             # Stream directly into pre-allocated VST float32 buffers
             vst = self.vst_engine
@@ -426,14 +448,15 @@ class AudioBridge:
                 vst.buf_in_r[i] = r_val
 
             # Process through native C++ VST DSP (SoniqMaxDSP.dll)
+            # Master Gain and soft-knee brickwall limiter are applied inside C++ VST
             vst.plugin.contents.processReplacing(vst.plugin, vst.in_ptrs, vst.out_ptrs, n_frames)
 
-            # Output processed stream with volume scaling & peak tracking
+            # Output processed stream directly from VST buffers
             peak_out_l = 0.0
             peak_out_r = 0.0
             for i in range(n_frames):
-                out_l = vst.buf_out_l[i] * vol
-                out_r = vst.buf_out_r[i] * vol
+                out_l = vst.buf_out_l[i]
+                out_r = vst.buf_out_r[i]
                 outdata[i, 0] = out_l
                 outdata[i, 1] = out_r
 
