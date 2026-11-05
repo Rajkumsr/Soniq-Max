@@ -92,3 +92,10 @@ crash_dumps/
 demo/
 scratch/
 
+# Runtime State & User Configurations
+active_profile.json
+SONIQ_APO_Config.txt
+custom_presets.json
+vst/bin/*.bak*
+
+
