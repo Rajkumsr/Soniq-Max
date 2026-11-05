@@ -38,6 +38,8 @@ Modern PC audio systems—especially laptop speakers, budget monitors, and consu
 
 ## ⚡ Key Architectural Features
 
+### 🎛️ 1. Native 64-Bit C++ VST 2.4 Engine (`SoniqVSTPlugin.dll` / `SoniqMaxDSP.dll`)
+Engineered with the decoupled pure C++17 **SoniqAther DSP Engine** (`vst/src/SoniqAther.hpp`) and compiled with `-O3 -static` optimizations:
 * **10-Band Parametric Equalizer:** Native IIR biquad peaking filters (32 Hz, 64 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, 16 kHz) with smooth parameter transitions and exact gain accuracy ($\pm 12\text{ dB}$).
 * **Headroom Preamp Stage:** Ramped linear gain management ($10^{\text{Preamp}_{\text{dB}}/20}$) pulls digital levels down before boosting EQ, eliminating digital clipping.
 * **Harmonic Bass Exciter (The Missing Fundamental):** Low-pass fundamental extraction (<130 Hz), 28 Hz subsonic protection, symmetrical 2nd-order ($s^2$ with 25 Hz DC blocker) and 3rd-order ($\tanh(2s) - 0.5s$) harmonic generation, and a dynamic wet/dry blend law.
