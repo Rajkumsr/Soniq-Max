@@ -1078,10 +1078,21 @@ class SoniqDesktopApp(ctk.CTk):
 
     def get_active_vst_path(self):
         """Returns relative APO path if in VSTPlugins folder, or absolute path to local build."""
+        if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
+            if os.path.isfile(APO_VST_PLUGIN_PATH):
+                try:
+                    local_size = os.path.getsize(LOCAL_VST_PLUGIN_PATH)
+                    apo_size = os.path.getsize(APO_VST_PLUGIN_PATH)
+                    local_mtime = os.path.getmtime(LOCAL_VST_PLUGIN_PATH)
+                    apo_mtime = os.path.getmtime(APO_VST_PLUGIN_PATH)
+                    if local_mtime > apo_mtime + 2.0 or local_size != apo_size:
+                        return os.path.abspath(LOCAL_VST_PLUGIN_PATH)
+                except Exception:
+                    pass
+                return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
+            return os.path.abspath(LOCAL_VST_PLUGIN_PATH)
         if os.path.isfile(APO_VST_PLUGIN_PATH):
             return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
-        if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
-            return LOCAL_VST_PLUGIN_PATH
         internal_vst = os.path.abspath(os.path.join(get_asset_dir(), "vst", "bin", APO_VST_PLUGIN_NAME))
         if os.path.isfile(internal_vst):
             return internal_vst
