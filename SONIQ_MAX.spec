@@ -6,6 +6,8 @@ from PyInstaller.utils.hooks import collect_all
 datas = [('soniq_icon.ico', '.')]
 if os.path.isfile('custom_category_map.csv'):
     datas.append(('custom_category_map.csv', '.'))
+if os.path.isfile('vst/bin/SoniqVSTPlugin.dll'):
+    datas.append(('vst/bin/SoniqVSTPlugin.dll', 'vst/bin'))
 if os.path.isfile('vst/bin/SoniqMaxDSP.dll'):
     datas.append(('vst/bin/SoniqMaxDSP.dll', 'vst/bin'))
 

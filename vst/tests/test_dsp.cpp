@@ -24,7 +24,7 @@
 #include <iomanip>
 
 // Include plugin implementation
-#include "../src/SoniqMaxDSP.cpp"
+#include "../src/SoniqVSTPlugin.cpp"
 
 void printHeader(const char* title) {
     std::cout << "\n======================================================\n";

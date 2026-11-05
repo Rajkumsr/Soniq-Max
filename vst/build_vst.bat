@@ -7,8 +7,9 @@ echo ===================================================
 echo.
 
 cd /d "%~dp0"
-set SRC=src\SoniqMaxDSP.cpp
-set OUT=bin\SoniqMaxDSP.dll
+set SRC=src\SoniqVSTPlugin.cpp
+set OUT=bin\SoniqVSTPlugin.dll
+set LEGACY_OUT=bin\SoniqMaxDSP.dll
 set APO_VST_DIR=C:\Program Files\EqualizerAPO\VSTPlugins
 
 if not exist bin mkdir bin
@@ -108,15 +109,18 @@ goto :INSTALL
 if exist "%OUT%" (
     echo.
     echo ===================================================
-    echo   [SUCCESS] Compiled SoniqMaxDSP.dll [64-bit]
+    echo   [SUCCESS] Compiled SoniqVSTPlugin.dll [64-bit]
     echo   Location: %~dp0%OUT%
     echo ===================================================
     echo.
+    copy /y "%OUT%" "%LEGACY_OUT%" >nul 2>&1
     if exist "%APO_VST_DIR%" (
         echo Deploying to Equalizer APO VSTPlugins folder...
+        copy /y "%OUT%" "%APO_VST_DIR%\SoniqVSTPlugin.dll" >nul 2>&1
         copy /y "%OUT%" "%APO_VST_DIR%\SoniqMaxDSP.dll" >nul 2>&1
         if !errorlevel! equ 0 (
             echo [INSTALLED] Successfully copied to:
+            echo   %APO_VST_DIR%\SoniqVSTPlugin.dll
             echo   %APO_VST_DIR%\SoniqMaxDSP.dll
         ) else (
             echo [NOTICE] Direct copy to C:\Program Files requires Administrator privileges.
@@ -124,11 +128,11 @@ if exist "%OUT%" (
             echo   "%~dp0%OUT%"
             echo.
             echo Optional: To install system-wide, copy "%~dp0%OUT%"
-            echo into: "%APO_VST_DIR%\SoniqMaxDSP.dll"
+            echo into: "%APO_VST_DIR%\SoniqVSTPlugin.dll"
         )
     )
     echo.
-    echo Equalizer APO will now automatically load SONIQ MAX DSP!
+    echo Equalizer APO will now automatically load SoniqVSTPlugin!
 ) else (
     echo [FAILED] Compilation failed.
 )

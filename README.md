@@ -38,8 +38,6 @@ Modern PC audio systems—especially laptop speakers, budget monitors, and consu
 
 ## ⚡ Key Architectural Features
 
-### 🎛️ 1. Native 64-Bit C++ VST 2.4 Engine (`SoniqMaxDSP.dll`)
-Engineered in decoupled pure C++17 (`vst/src/SoniqDspCore.hpp`) and compiled with `-O3 -static` optimizations:
 * **10-Band Parametric Equalizer:** Native IIR biquad peaking filters (32 Hz, 64 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, 4 kHz, 8 kHz, 16 kHz) with smooth parameter transitions and exact gain accuracy ($\pm 12\text{ dB}$).
 * **Headroom Preamp Stage:** Ramped linear gain management ($10^{\text{Preamp}_{\text{dB}}/20}$) pulls digital levels down before boosting EQ, eliminating digital clipping.
 * **Harmonic Bass Exciter (The Missing Fundamental):** Low-pass fundamental extraction (<130 Hz), 28 Hz subsonic protection, symmetrical 2nd-order ($s^2$ with 25 Hz DC blocker) and 3rd-order ($\tanh(2s) - 0.5s$) harmonic generation, and a dynamic wet/dry blend law.
@@ -234,14 +232,15 @@ Soniq-Max/
 ├── vst/                      # Native C++ VST 2.4 Psychoacoustic Engine
 │   ├── build_vst.bat         # Automated compiler detection & build script
 │   ├── src/
-│   │   ├── SoniqDspCore.hpp  # Pure C++ Decoupled DSP Engine (10-Band EQ, Limiter, Harmonics)
-│   │   ├── SoniqMaxDSP.cpp   # VST 2.4 Adapter & Direct C-ABI Exports
+│   │   ├── SoniqAther.hpp    # Pure C++ Decoupled SoniqAther DSP Engine (10-Band EQ, Limiter, Harmonics)
+│   │   ├── SoniqVSTPlugin.cpp # VST 2.4 Adapter & Direct C-ABI Exports
 │   │   └── aeffect.h         # Standard VST 2.4 C-ABI definitions
 │   ├── tests/
 │   │   ├── test_dsp.cpp      # Standalone 25-test Native C++ test harness
 │   │   └── test_dsp.exe      # Compiled verification binary
 │   └── bin/
-│       └── SoniqMaxDSP.dll   # Precompiled 64-bit native DLL (292 KB)
+│       ├── SoniqVSTPlugin.dll # Native 64-bit VST 2.4 DSP plugin (292 KB)
+│       └── SoniqMaxDSP.dll   # Backward-compatible VST 2.4 DLL alias (292 KB)
 │
 ├── ui/                       # Modular CustomTkinter Interface Components
 │   ├── tab_audio.py          # Profiles, cards, volume and night mode

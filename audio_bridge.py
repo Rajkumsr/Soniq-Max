@@ -252,8 +252,11 @@ class AudioBridge:
 
     def _find_vst_dll(self) -> str:
         candidates = [
+            os.path.join(os.path.dirname(__file__), "vst", "bin", "SoniqVSTPlugin.dll"),
             os.path.join(os.path.dirname(__file__), "vst", "bin", "SoniqMaxDSP.dll"),
+            r"C:\Program Files\EqualizerAPO\VSTPlugins\SoniqVSTPlugin.dll",
             r"C:\Program Files\EqualizerAPO\VSTPlugins\SoniqMaxDSP.dll",
+            os.path.join(os.path.dirname(__file__), "SoniqVSTPlugin.dll"),
             os.path.join(os.path.dirname(__file__), "SoniqMaxDSP.dll"),
         ]
         for p in candidates:

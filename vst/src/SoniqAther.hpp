@@ -204,10 +204,10 @@ public:
 };
 
 /**
- * Pure C++ SoniqDspEngine
+ * Pure C++ SoniqAther DSP Engine
  * Single Source of Truth Audio Enhancement Processor.
  */
-class SoniqDspEngine {
+class SoniqAther {
 public:
     float sampleRate;
     float params[NUM_PARAMS];
@@ -256,7 +256,7 @@ public:
     float limiterReleaseCoef;
     float limiterGainSmoothCoef;
 
-    SoniqDspEngine() {
+    SoniqAther() {
         sampleRate = 48000.0f;
         std::memset(params, 0, sizeof(params));
 
@@ -584,5 +584,8 @@ public:
         delete[] tempR;
     }
 };
+
+// Backward compatibility alias
+using SoniqDspEngine = SoniqAther;
 
 } // namespace SoniqAudio

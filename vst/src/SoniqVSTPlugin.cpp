@@ -1,17 +1,17 @@
 /**
- * SONIQ MAX PRO Real-Time Psychoacoustic DSP Audio Processing Plugin
+ * SoniqVSTPlugin — Real-Time Psychoacoustic DSP Audio Processing Plugin
  * Engineered by CodeCraftersIndia
  * Compatible with Equalizer APO & Direct Soniq Engine (64-bit Windows)
  *
  * Single Source of Truth Architecture:
- * - Core Algorithms: SoniqDspCore.hpp (Decoupled Pure C++ DSP Engine)
- * - VST 2.4 Interface: SoniqMaxEffect (Adapts core engine to VST 2.4 specification)
+ * - Core Algorithms: SoniqAther.hpp (Decoupled Pure C++ SoniqAther DSP Engine)
+ * - VST 2.4 Interface: SoniqVSTPlugin (Adapts core engine to VST 2.4 specification)
  * - 23 Parameters: 10-Band EQ, Preamp, Harmonics, Clarity, Spatial, Limiter, Bypasses
  * - Standard C ABI Exports: Direct high-performance invocation without VST wrapper overhead
  */
 
 #include "aeffect.h"
-#include "SoniqDspCore.hpp"
+#include "SoniqAther.hpp"
 
 // Bring parameter constants into global scope for backward compatibility
 using SoniqAudio::NUM_PARAMS;
@@ -47,10 +47,10 @@ using SoniqAudio::kParamSpeakerHPF;
 #define VST_EXPORT
 #endif
 
-class SoniqMaxEffect {
+class SoniqVSTPlugin {
 public:
     AEffect effect;
-    SoniqAudio::SoniqDspEngine dsp;
+    SoniqAudio::SoniqAther dsp;
 
     // Direct member aliases for tests & backward-compatibility
     float& sampleRate;
@@ -60,7 +60,7 @@ public:
     float& smoothedSpatial;
     float& smoothedMasterGain;
 
-    SoniqMaxEffect() :
+    SoniqVSTPlugin() :
         sampleRate(dsp.sampleRate),
         params(dsp.params),
         smoothedBass(dsp.smoothedBass),
@@ -110,7 +110,7 @@ public:
     }
 
     static intptr_t dispatcherCallback(AEffect* e, int32_t opcode, int32_t index, intptr_t value, void* ptr, float opt) {
-        SoniqMaxEffect* self = static_cast<SoniqMaxEffect*>(e->object);
+        SoniqVSTPlugin* self = static_cast<SoniqVSTPlugin*>(e->object);
         switch (opcode) {
             case effOpen:
                 return 0;
@@ -121,7 +121,7 @@ public:
                 self->dsp.setSampleRate(opt);
                 return 0;
             case effGetEffectName:
-                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX DSP", 31);
+                std::strncpy(static_cast<char*>(ptr), "SoniqVSTPlugin", 31);
                 return 1;
             case effGetVendorString:
                 std::strncpy(static_cast<char*>(ptr), "CodeCraftersIndia", 31);
@@ -196,27 +196,30 @@ public:
     }
 
     static void setParameterCallback(AEffect* e, int32_t index, float value) {
-        SoniqMaxEffect* self = static_cast<SoniqMaxEffect*>(e->object);
+        SoniqVSTPlugin* self = static_cast<SoniqVSTPlugin*>(e->object);
         self->dsp.setParameter(index, value);
     }
 
     static float getParameterCallback(AEffect* e, int32_t index) {
-        SoniqMaxEffect* self = static_cast<SoniqMaxEffect*>(e->object);
+        SoniqVSTPlugin* self = static_cast<SoniqVSTPlugin*>(e->object);
         return self->dsp.getParameter(index);
     }
 
     static void processReplacingCallback(AEffect* e, float** inputs, float** outputs, int32_t sampleFrames) {
-        SoniqMaxEffect* self = static_cast<SoniqMaxEffect*>(e->object);
+        SoniqVSTPlugin* self = static_cast<SoniqVSTPlugin*>(e->object);
         self->dsp.process(inputs, outputs, sampleFrames);
     }
 };
+
+// Backward compatibility alias for tests and direct callers
+using SoniqMaxEffect = SoniqVSTPlugin;
 
 // ============================================================================
 // Standard VST 2.4 Entry Point
 // ============================================================================
 extern "C" {
     VST_EXPORT AEffect* VSTPluginMain(audioMasterCallback audioMaster) {
-        SoniqMaxEffect* effect = new SoniqMaxEffect();
+        SoniqVSTPlugin* effect = new SoniqVSTPlugin();
         return &effect->effect;
     }
 }
@@ -226,49 +229,49 @@ extern "C" {
 // ============================================================================
 extern "C" {
     VST_EXPORT void* Soniq_CreateEngine() {
-        return new SoniqAudio::SoniqDspEngine();
+        return new SoniqAudio::SoniqAther();
     }
 
     VST_EXPORT void Soniq_DestroyEngine(void* handle) {
         if (handle) {
-            delete static_cast<SoniqAudio::SoniqDspEngine*>(handle);
+            delete static_cast<SoniqAudio::SoniqAther*>(handle);
         }
     }
 
     VST_EXPORT void Soniq_SetSampleRate(void* handle, float sampleRate) {
         if (handle) {
-            static_cast<SoniqAudio::SoniqDspEngine*>(handle)->setSampleRate(sampleRate);
+            static_cast<SoniqAudio::SoniqAther*>(handle)->setSampleRate(sampleRate);
         }
     }
 
     VST_EXPORT void Soniq_SetParameter(void* handle, int paramIndex, float value) {
         if (handle) {
-            static_cast<SoniqAudio::SoniqDspEngine*>(handle)->setParameter(paramIndex, value);
+            static_cast<SoniqAudio::SoniqAther*>(handle)->setParameter(paramIndex, value);
         }
     }
 
     VST_EXPORT float Soniq_GetParameter(void* handle, int paramIndex) {
         if (handle) {
-            return static_cast<SoniqAudio::SoniqDspEngine*>(handle)->getParameter(paramIndex);
+            return static_cast<SoniqAudio::SoniqAther*>(handle)->getParameter(paramIndex);
         }
         return 0.0f;
     }
 
     VST_EXPORT void Soniq_Reset(void* handle) {
         if (handle) {
-            static_cast<SoniqAudio::SoniqDspEngine*>(handle)->reset();
+            static_cast<SoniqAudio::SoniqAther*>(handle)->reset();
         }
     }
 
     VST_EXPORT void Soniq_ProcessReplacing(void* handle, float** inputs, float** outputs, int sampleFrames) {
         if (handle) {
-            static_cast<SoniqAudio::SoniqDspEngine*>(handle)->process(inputs, outputs, sampleFrames);
+            static_cast<SoniqAudio::SoniqAther*>(handle)->process(inputs, outputs, sampleFrames);
         }
     }
 
     VST_EXPORT void Soniq_ProcessInterleaved(void* handle, float* inOutBuffer, int sampleFrames) {
         if (handle) {
-            static_cast<SoniqAudio::SoniqDspEngine*>(handle)->processInterleaved(inOutBuffer, sampleFrames);
+            static_cast<SoniqAudio::SoniqAther*>(handle)->processInterleaved(inOutBuffer, sampleFrames);
         }
     }
 }

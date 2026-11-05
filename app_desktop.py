@@ -28,7 +28,9 @@ import psutil
 
 from audio_content import AudioContentMonitor
 from constants import (
-    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, LOCAL_VST_PLUGIN_PATH,
+    THEME, DEFAULT_PROFILES, CONFIG_FILE, CUSTOM_PRESETS_FILE, APO_DEFAULT_PATH,
+    APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME, LOCAL_VST_PLUGIN_PATH,
+    LEGACY_APO_VST_PLUGIN_NAME, LEGACY_APO_VST_PLUGIN_PATH, LEGACY_LOCAL_VST_PLUGIN_PATH,
     DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES, get_asset_dir,
     get_base_dir, resolve_sense_profile,
     should_classify_browser_audio, validate_profile_data
@@ -1078,30 +1080,36 @@ class SoniqDesktopApp(ctk.CTk):
 
     def get_active_vst_path(self):
         """Returns relative APO path if in VSTPlugins folder, or absolute path to local build."""
-        if os.path.isfile(LOCAL_VST_PLUGIN_PATH):
-            if os.path.isfile(APO_VST_PLUGIN_PATH):
-                try:
-                    local_size = os.path.getsize(LOCAL_VST_PLUGIN_PATH)
-                    apo_size = os.path.getsize(APO_VST_PLUGIN_PATH)
-                    local_mtime = os.path.getmtime(LOCAL_VST_PLUGIN_PATH)
-                    apo_mtime = os.path.getmtime(APO_VST_PLUGIN_PATH)
-                    if local_mtime > apo_mtime + 2.0 or local_size != apo_size:
-                        return os.path.abspath(LOCAL_VST_PLUGIN_PATH)
-                except Exception:
-                    pass
-                return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
-            return os.path.abspath(LOCAL_VST_PLUGIN_PATH)
-        if os.path.isfile(APO_VST_PLUGIN_PATH):
-            return f"VSTPlugins\\{APO_VST_PLUGIN_NAME}"
-        internal_vst = os.path.abspath(os.path.join(get_asset_dir(), "vst", "bin", APO_VST_PLUGIN_NAME))
-        if os.path.isfile(internal_vst):
-            return internal_vst
-        parent_vst = os.path.abspath(os.path.join(get_base_dir(), "..", "vst", "bin", APO_VST_PLUGIN_NAME))
-        if os.path.isfile(parent_vst):
-            return parent_vst
-        root_vst = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vst", "bin", APO_VST_PLUGIN_NAME))
-        if os.path.isfile(root_vst):
-            return root_vst
+        for local_p, apo_p, name in [
+            (LOCAL_VST_PLUGIN_PATH, APO_VST_PLUGIN_PATH, APO_VST_PLUGIN_NAME),
+            (LEGACY_LOCAL_VST_PLUGIN_PATH, LEGACY_APO_VST_PLUGIN_PATH, LEGACY_APO_VST_PLUGIN_NAME)
+        ]:
+            if os.path.isfile(local_p):
+                if os.path.isfile(apo_p):
+                    try:
+                        local_size = os.path.getsize(local_p)
+                        apo_size = os.path.getsize(apo_p)
+                        local_mtime = os.path.getmtime(local_p)
+                        apo_mtime = os.path.getmtime(apo_p)
+                        if local_mtime > apo_mtime + 2.0 or local_size != apo_size:
+                            return os.path.abspath(local_p)
+                    except Exception:
+                        pass
+                    return f"VSTPlugins\\{name}"
+                return os.path.abspath(local_p)
+            if os.path.isfile(apo_p):
+                return f"VSTPlugins\\{name}"
+
+        for name in (APO_VST_PLUGIN_NAME, LEGACY_APO_VST_PLUGIN_NAME):
+            internal_vst = os.path.abspath(os.path.join(get_asset_dir(), "vst", "bin", name))
+            if os.path.isfile(internal_vst):
+                return internal_vst
+            parent_vst = os.path.abspath(os.path.join(get_base_dir(), "..", "vst", "bin", name))
+            if os.path.isfile(parent_vst):
+                return parent_vst
+            root_vst = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "vst", "bin", name))
+            if os.path.isfile(root_vst):
+                return root_vst
         return None
 
     def is_vst_installed(self):
