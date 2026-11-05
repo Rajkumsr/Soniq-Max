@@ -139,7 +139,7 @@ class SoniqDesktopApp(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("SONIQ MAX PRO — Audio Suite")
+        self.title("SONIQ MAX PRO — CodeCraftersIndia")
         self.geometry("940x740")
         self.minsize(900, 680)
         self.configure(fg_color=THEME["bg_dark"])
@@ -409,7 +409,7 @@ class SoniqDesktopApp(ctk.CTk):
 
         app_sub = ctk.CTkLabel(
             logo_box, 
-            text="Adaptive audio engine • Personalized sound profiles",
+            text="Adaptive audio engine • CodeCraftersIndia",
             font=ctk.CTkFont(family="Segoe UI", size=11),
             text_color=THEME["text_dim"]
         )

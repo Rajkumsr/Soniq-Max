@@ -42,7 +42,7 @@ class SystemTrayService:
             )
 
         menu = pystray.Menu(
-            pystray.MenuItem("SONIQ MAX PRO", lambda: self.cb["show"](), default=True),
+            pystray.MenuItem("SONIQ MAX PRO · CodeCraftersIndia", lambda: self.cb["show"](), default=True),
             pystray.MenuItem("Sound Profiles", pystray.Menu(*preset_items)),
             pystray.MenuItem("Toggle Enhanced / Bypass", lambda: self.cb["toggle_bypass"]()),
             pystray.MenuItem("Toggle Stream Auto-Adapt", lambda: self.cb["toggle_auto_adapt"]()),
@@ -51,7 +51,7 @@ class SystemTrayService:
             pystray.MenuItem("Quit", lambda: self.cb["quit"]())
         )
 
-        self.icon = pystray.Icon("SONIQ_MAX", img, "SONIQ MAX — Sound Enhancer", menu=menu)
+        self.icon = pystray.Icon("SONIQ_MAX", img, "SONIQ MAX PRO · CodeCraftersIndia", menu=menu)
         threading.Thread(target=self.icon.run, daemon=True).start()
 
     def notify(self, message, title="SONIQ MAX"):

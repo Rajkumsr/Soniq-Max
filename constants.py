@@ -1,10 +1,19 @@
 """
 SONIQ MAX PRO — Global Constants, Paths, Color Theme, and Default Presets.
+Engineered by CodeCraftersIndia.
 """
 import os
 import sys
 import math
 import colorsys
+
+# Branding & Metadata
+APP_NAME = "SONIQ MAX PRO"
+APP_ORGANIZATION = "CodeCraftersIndia"
+APP_AUTHOR = "CodeCraftersIndia"
+APP_VERSION = "2.5.0"
+APP_COPYRIGHT = "© 2026 CodeCraftersIndia. All rights reserved."
+APP_GITHUB_URL = "https://github.com/Rajkumsr/Soniq-Max"
 
 def get_base_dir():
     """Returns directory of executable or script."""

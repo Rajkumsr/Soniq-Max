@@ -3,7 +3,9 @@
 # 🎛️ SONIQ MAX PRO
 
 ### *Enterprise-Grade Psychoacoustic Audio Processing & Real-Time Windows Sound Optimization*
+### *Engineered by CodeCraftersIndia*
 
+[![Organization: CodeCraftersIndia](https://img.shields.io/badge/organization-CodeCraftersIndia-FF6F00?style=for-the-badge)](https://github.com/Rajkumsr/Soniq-Max)
 [![Platform: Windows 10 / 11 (64-bit)](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011%20(x64)-0078D6?style=for-the-badge&logo=windows)](https://github.com/Rajkumsr/Soniq-Max)
 [![Python: 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![C++: 17](https://img.shields.io/badge/C%2B%2B-17-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
@@ -270,6 +272,13 @@ Soniq-Max/
 * **100% Offline:** Zero telemetry, analytics, or outbound network calls.
 * **Audio Privacy:** Soniq Sense inspects process metadata and local loopback buffers strictly in memory; no audio is recorded, saved to disk, or transmitted.
 * **Non-Destructive:** Managed configurations are sandboxed to `SONIQ_MAX_Config.txt`, preserving existing Equalizer APO calibration curves.
+
+---
+
+## 🇮🇳 Engineered by CodeCraftersIndia
+
+**SONIQ MAX PRO** is developed and maintained by **CodeCraftersIndia**.
+Contributions, feature suggestions, and bug reports are warmly welcome via [GitHub Issues](https://github.com/Rajkumsr/Soniq-Max/issues).
 
 ---
 

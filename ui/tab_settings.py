@@ -5,8 +5,9 @@ native VST engine controls, global system hotkeys, diagnostics, Windows startup 
 and application info with zero duplication.
 """
 import os
+import webbrowser
 import customtkinter as ctk
-from constants import THEME, APO_DEFAULT_PATH
+from constants import THEME, APO_DEFAULT_PATH, APP_GITHUB_URL, APP_ORGANIZATION
 from ui.fluent_effects import CollapsibleSection, FluentTooltip, stagger_cascade_entrance
 
 
@@ -360,15 +361,29 @@ class SettingsTab(ctk.CTkFrame):
         about_box = ctk.CTkFrame(self.c_about, fg_color="transparent")
         about_box.pack(fill="x", padx=16, pady=12)
 
-        lbl_abt_title = ctk.CTkLabel(about_box, text="SONIQ MAX PRO · v2.5.0 Standalone", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=THEME["accent_gold"])
+        lbl_abt_title = ctk.CTkLabel(about_box, text=f"SONIQ MAX PRO · {APP_ORGANIZATION}", font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"), text_color=THEME["accent_gold"])
         lbl_abt_title.pack(anchor="w")
 
         lbl_abt_body = ctk.CTkLabel(
             about_box,
-            text="Hardware-Optimized Psychoacoustic Audio Suite for Windows 11.\nDirect VST Pipeline & Intelligent Content-Aware Sound Shaping.",
+            text=f"Engineered & Maintained by {APP_ORGANIZATION}.\nHardware-Optimized Psychoacoustic Audio Suite for Windows 11.\nDirect VST Pipeline & Intelligent Content-Aware Sound Shaping.",
             font=ctk.CTkFont(family="Segoe UI", size=11), text_color=THEME["text_dim"], justify="left"
         )
-        lbl_abt_body.pack(anchor="w", pady=(2, 0))
+        lbl_abt_body.pack(anchor="w", pady=(2, 6))
+
+        btn_github = ctk.CTkButton(
+            about_box,
+            text=f"🌐 {APP_ORGANIZATION} on GitHub",
+            font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
+            fg_color=THEME["pill_bg"],
+            text_color=THEME["accent_gold"],
+            hover_color=THEME["btn_secondary_hover"],
+            border_width=1,
+            border_color=THEME["pill_border"],
+            height=28,
+            command=lambda: webbrowser.open(APP_GITHUB_URL)
+        )
+        btn_github.pack(anchor="w", pady=(2, 0))
 
         # Initial UI synchronization
         self.update_engine_ui()

@@ -1,5 +1,6 @@
 /**
  * SONIQ MAX PRO Real-Time Psychoacoustic DSP Audio Processing Plugin
+ * Engineered by CodeCraftersIndia
  * Compatible with Equalizer APO & Direct Soniq Engine (64-bit Windows)
  *
  * Single Source of Truth Architecture:
@@ -123,10 +124,10 @@ public:
                 std::strncpy(static_cast<char*>(ptr), "SONIQ MAX DSP", 31);
                 return 1;
             case effGetVendorString:
-                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX", 31);
+                std::strncpy(static_cast<char*>(ptr), "CodeCraftersIndia", 31);
                 return 1;
             case effGetProductString:
-                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX Audio Enhancer", 31);
+                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX PRO by CodeCrafters", 31);
                 return 1;
             case effGetParamName:
                 switch (index) {

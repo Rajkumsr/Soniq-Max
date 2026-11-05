@@ -1,5 +1,6 @@
 /**
  * SONIQ MAX PRO — Core DSP Engine
+ * Engineered by CodeCraftersIndia
  * Pure C++ Audio DSP Architecture (Decoupled from VST / Host Interfaces)
  *
  * Single Source of Truth (SSOT) Audio Enhancement Pipeline:

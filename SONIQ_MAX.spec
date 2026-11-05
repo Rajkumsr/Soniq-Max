@@ -64,6 +64,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['soniq_icon.ico'],
+    version='version_info.txt',
 )
 
 coll = COLLECT(
