@@ -16,11 +16,11 @@ VSVersionInfo(
       [
       StringTable(
         '040904b0',
-        [StringStruct('CompanyName', 'CodeCraftersIndia'),
+        [StringStruct('CompanyName', 'Rajkumar Patil'),
         StringStruct('FileDescription', 'SONIQ MAX PRO — Real-Time Psychoacoustic Audio Suite'),
         StringStruct('FileVersion', '2.5.0.0'),
         StringStruct('InternalName', 'SONIQ_MAX'),
-        StringStruct('LegalCopyright', '© 2026 CodeCraftersIndia. All rights reserved.'),
+        StringStruct('LegalCopyright', '© 2026 Rajkumar Patil. All rights reserved.'),
         StringStruct('OriginalFilename', 'SONIQ_MAX.exe'),
         StringStruct('ProductName', 'SONIQ MAX PRO'),
         StringStruct('ProductVersion', '2.5.0.0')])

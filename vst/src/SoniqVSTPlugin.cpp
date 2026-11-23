@@ -1,6 +1,6 @@
 /**
  * SoniqVSTPlugin — Real-Time Psychoacoustic DSP Audio Processing Plugin
- * Engineered by CodeCraftersIndia
+ * Developed by Rajkumar Patil
  * Compatible with Equalizer APO & Direct Soniq Engine (64-bit Windows)
  *
  * Single Source of Truth Architecture:
@@ -124,10 +124,10 @@ public:
                 std::strncpy(static_cast<char*>(ptr), "SoniqVSTPlugin", 31);
                 return 1;
             case effGetVendorString:
-                std::strncpy(static_cast<char*>(ptr), "CodeCraftersIndia", 31);
+                std::strncpy(static_cast<char*>(ptr), "Rajkumar Patil", 31);
                 return 1;
             case effGetProductString:
-                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX PRO by CodeCrafters", 31);
+                std::strncpy(static_cast<char*>(ptr), "SONIQ MAX PRO", 31);
                 return 1;
             case effGetParamName:
                 switch (index) {

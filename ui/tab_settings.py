@@ -373,7 +373,7 @@ class SettingsTab(ctk.CTkFrame):
 
         btn_github = ctk.CTkButton(
             about_box,
-            text=f"🌐 {APP_ORGANIZATION} on GitHub",
+            text="🌐 GitHub (Rajkumar Patil)",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             fg_color=THEME["pill_bg"],
             text_color=THEME["accent_gold"],
