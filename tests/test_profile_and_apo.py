@@ -27,29 +27,29 @@ class ProfileValidationTests(unittest.TestCase):
             validate_profile_data(profile)
 
     def test_rejects_invalid_eq_gain(self):
-        profile = copy.deepcopy(DEFAULT_PROFILES["laptop_lifesaver"])
+        profile = copy.deepcopy(DEFAULT_PROFILES["cinema_dialogue"])
         profile["eq"][0] = 13
         with self.assertRaisesRegex(ValueError, "between -12 and \\+12"):
             validate_profile_data(profile)
 
     def test_rejects_boolean_as_numeric_value(self):
-        profile = copy.deepcopy(DEFAULT_PROFILES["laptop_lifesaver"])
+        profile = copy.deepcopy(DEFAULT_PROFILES["cinema_dialogue"])
         profile["bass"] = True
         with self.assertRaisesRegex(ValueError, "must be a number"):
             validate_profile_data(profile)
 
     def test_soniq_sense_assignments_override_detected_category_defaults(self):
         assignments = {
-            "gaming": "audiophile_flat",
+            "gaming": "fps_gaming",
             "music": "cinema_dialogue",
             "speech": "bass_beast",
-            "other": "laptop_lifesaver",
+            "other": "voice_meeting",
         }
 
-        self.assertEqual(resolve_sense_profile("fps_gaming", assignments), "audiophile_flat")
+        self.assertEqual(resolve_sense_profile("fps_gaming", assignments), "fps_gaming")
         self.assertEqual(resolve_sense_profile("bass_beast", assignments), "cinema_dialogue")
         self.assertEqual(resolve_sense_profile("voice_meeting", assignments), "bass_beast")
-        self.assertEqual(resolve_sense_profile("other", assignments), "laptop_lifesaver")
+        self.assertEqual(resolve_sense_profile("other", assignments), "voice_meeting")
         self.assertEqual(resolve_sense_profile("unknown_target", assignments), "unknown_target")
 
     def test_soniq_sense_runs_content_classifier_only_for_browser_sessions(self):
@@ -79,7 +79,7 @@ class ApoConfigTests(unittest.TestCase):
 
     def test_disabled_effects_generate_neutral_filter_values(self):
         values = profile_filter_values(
-            DEFAULT_PROFILES["laptop_lifesaver"],
+            DEFAULT_PROFILES["cinema_dialogue"],
             {"bass": False, "clarity": False, "spatial": False, "volume": False},
         )
 

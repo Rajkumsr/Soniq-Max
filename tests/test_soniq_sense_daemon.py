@@ -223,12 +223,12 @@ class DaemonIntegrationTests(unittest.TestCase):
             foreground_reader=lambda: app,
             debounce=2,
         )
-        daemon.current_profile = "audiophile_flat"
+        daemon.current_profile = "cinema_dialogue"
         with patch("soniq_sense_daemon.install_apo_config") as install:
             for _ in range(18):
                 daemon.run_iteration()
 
-        self.assertEqual(daemon.current_profile, "audiophile_flat")
+        self.assertEqual(daemon.current_profile, "cinema_dialogue")
         install.assert_not_called()
 
     def test_cinema_routing_preserves_music_when_active_and_switches_otherwise(self):

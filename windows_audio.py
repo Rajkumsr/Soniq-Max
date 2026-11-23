@@ -352,7 +352,7 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
 
     # 6. Generic streaming fallback only if title or audio was identified
     title_snippet = f": {title[:16]}" if title else ""
-    return "laptop_lifesaver", f"🔊 {short_name}{title_snippet}"
+    return "cinema_dialogue", f"🔊 {short_name}{title_snippet}"
 
 def get_dynamic_windows_audio_sources():
     """

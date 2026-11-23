@@ -129,19 +129,8 @@ def build_windows_fluent_theme():
 # Windows Native Fluent Theme Palette
 THEME = build_windows_fluent_theme()
 
-# 6 Built-In Default Profiles
+# 4 Built-In Default Profiles
 DEFAULT_PROFILES = {
-    "laptop_lifesaver": {
-        "title": "Laptop Lifesaver",
-        "icon": "💻",
-        "badge": "RECOMMENDED",
-        "desc": "A laptop-focused EQ with a low-frequency cut, added upper-bass energy, stereo channel mixing, and clearer vocal frequencies.",
-        "bass": 75,
-        "clarity": 80,
-        "spatial": 165,
-        "volume": 5.5,
-        "eq": [1.0, 3.5, 4.0, -1.5, 0.5, 2.0, 4.0, 5.5, 4.0, 3.0]
-    },
     "cinema_dialogue": {
         "title": "Cinema & Dialogue",
         "icon": "🎬",
@@ -185,17 +174,6 @@ DEFAULT_PROFILES = {
         "spatial": 110,
         "volume": 5.0,
         "eq": [-6.0, -3.0, 0.0, -2.0, 2.0, 4.0, 5.0, 3.0, 1.0, -2.0]
-    },
-    "audiophile_flat": {
-        "title": "Acoustic Pure",
-        "icon": "🎧",
-        "badge": "HI-FI / FLAT",
-        "desc": "Balanced, transparent mastering response for classical, acoustic, and high-fidelity music listening.",
-        "bass": 20,
-        "clarity": 30,
-        "spatial": 115,
-        "volume": 1.0,
-        "eq": [0.0, 0.5, 0.5, 0.0, 0.0, 0.5, 0.5, 0.5, 0.5, 0.0]
     }
 }
 
@@ -297,7 +275,7 @@ DEFAULT_SENSE_PROFILE_ASSIGNMENTS = {
     "gaming": "fps_gaming",
     "music": "bass_beast",
     "speech": "cinema_dialogue",
-    "other": "laptop_lifesaver",
+    "other": "cinema_dialogue",
 }
 
 SENSE_TARGET_CATEGORIES = {

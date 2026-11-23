@@ -271,12 +271,10 @@ class SettingsTab(ctk.CTkFrame):
             ("Ctrl + Alt + B", "Toggle Master Bypass (Effects ON / OFF)"),
             ("Ctrl + Alt + N", "Toggle Night Mode (Dialogue Leveler)"),
             ("Ctrl + Alt + S", "Show / Restore SONIQ MAX from System Tray"),
-            ("Ctrl + Alt + 1", "Preset 1: Laptop Lifesaver (Anti-Rattle)"),
-            ("Ctrl + Alt + 2", "Preset 2: Cinema & Dialogue (Movies / OTT)"),
-            ("Ctrl + Alt + 3", "Preset 3: Bass & EDM Beast (Club Sub-Bass)"),
-            ("Ctrl + Alt + 4", "Preset 4: Battlefield 360 (Combat & Footsteps)"),
-            ("Ctrl + Alt + 5", "Preset 5: Zoom & Meeting (Vocal Clarity)"),
-            ("Ctrl + Alt + 6", "Preset 6: Acoustic Pure (Hi-Fi Flat)"),
+            ("Ctrl + Alt + 1", "Preset 1: Cinema & Dialogue (Movies / OTT)"),
+            ("Ctrl + Alt + 2", "Preset 2: Bass & EDM Beast (Club Sub-Bass)"),
+            ("Ctrl + Alt + 3", "Preset 3: Battlefield 360 (Combat & Footsteps)"),
+            ("Ctrl + Alt + 4", "Preset 4: Zoom & Meeting (Vocal Clarity)"),
         ]
 
         for idx, (combo, action) in enumerate(shortcuts):

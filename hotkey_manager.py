@@ -45,8 +45,6 @@ class GlobalHotkeyManager:
             105: (ord('2'), "select_preset_1"),
             106: (ord('3'), "select_preset_2"),
             107: (ord('4'), "select_preset_3"),
-            108: (ord('5'), "select_preset_4"),
-            109: (ord('6'), "select_preset_5"),
         }
 
         # Force thread message queue creation

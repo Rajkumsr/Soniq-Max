@@ -148,7 +148,7 @@ class SoniqDesktopApp(ctk.CTk):
 
         # Core State
         self.profiles = copy.deepcopy(DEFAULT_PROFILES)
-        self.active_profile_key = "laptop_lifesaver"
+        self.active_profile_key = "cinema_dialogue"
         self.is_enhanced = True
         self.night_mode = False
         self.auto_app_enabled = True
@@ -236,7 +236,7 @@ class SoniqDesktopApp(ctk.CTk):
             if not isinstance(data, dict):
                 raise ValueError("Settings file must contain a JSON object.")
 
-            profile_key = data.get("active_profile", "laptop_lifesaver")
+            profile_key = data.get("active_profile", "cinema_dialogue")
             if isinstance(profile_key, str) and profile_key in self.profiles:
                 self.active_profile_key = profile_key
             else:
@@ -363,7 +363,7 @@ class SoniqDesktopApp(ctk.CTk):
         self._write_json_atomically(CUSTOM_PRESETS_FILE, custom_only)
         if getattr(self, "tab_smart", None):
             self.tab_smart.refresh_profile_choices()
-        self.select_profile("laptop_lifesaver", apply_system=True)
+        self.select_profile("cinema_dialogue", apply_system=True)
         if getattr(self, "tab_audio", None):
             self.tab_audio.render_profiles(self.profiles, self.active_profile_key)
         self.lbl_status.configure(
@@ -1380,12 +1380,10 @@ class SoniqDesktopApp(ctk.CTk):
     def on_hotkey_triggered(self, action):
         """Thread-safe handler for registered Win32 global hotkeys."""
         profile_keys = [
-            "laptop_lifesaver",
             "cinema_dialogue",
             "bass_beast",
             "fps_gaming",
             "voice_meeting",
-            "audiophile_flat"
         ]
 
         if action == "toggle_bypass":
