@@ -5,7 +5,9 @@ and heuristic app/window classification.
 """
 import ctypes
 import logging
+import re
 import time
+import winreg
 from ctypes import wintypes, POINTER
 import psutil
 
@@ -253,10 +255,111 @@ def get_active_windows_output_device():
             logger.debug("Could not uninitialize endpoint COM call", exc_info=True)
     return "Speakers (Default Audio)", False
 
+def get_default_render_guid():
+    """
+    Retrieves the Windows MMDevice GUID of the active default playback endpoint.
+    Example: '{8fae6401-2e2f-4cb2-9d26-d68c75106bb3}'
+    """
+    if PYCAW_AVAILABLE:
+        try:
+            comtypes.CoInitialize()
+            spk = AudioUtilities.GetSpeakers()
+            if spk and getattr(spk, "id", None):
+                m = re.search(r"\{[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}", spk.id)
+                if m:
+                    return m.group(0).lower()
+        except Exception:
+            logger.debug("Could not get render GUID from pycaw", exc_info=True)
+        finally:
+            try:
+                comtypes.CoUninitialize()
+            except Exception:
+                pass
+
+    # Registry Fallback: scan active render endpoints
+    try:
+        render_path = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, render_path) as k:
+            num_subkeys = winreg.QueryInfoKey(k)[0]
+            for i in range(num_subkeys):
+                sub_name = winreg.EnumKey(k, i)
+                if not sub_name.startswith("{"):
+                    continue
+                try:
+                    with winreg.OpenKey(k, sub_name) as dev_k:
+                        state, _ = winreg.QueryValueEx(dev_k, "DeviceState")
+                        # DeviceState == 1 (DEVICE_STATE_ACTIVE)
+                        if state == 1:
+                            return sub_name.lower()
+                except OSError:
+                    continue
+    except Exception:
+        logger.debug("Could not get render GUID from registry", exc_info=True)
+    return None
+
+def is_device_default_effects_active(guid=None):
+    """
+    Reads the active playback device's FxProperties in the Windows Registry:
+    HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\MMDevices\\Audio\\Render\\{guid}\\FxProperties
+    Checks PKEY_AudioEndpoint_Disable_SysFx ({1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5).
+    
+    Returns:
+        bool: True if Windows 'Device Default Effects' (e.g. Realtek Audio Enhancements) are enabled.
+              False if disabled by user in Windows Sound Settings (or not supported).
+    """
+    if not guid:
+        guid = get_default_render_guid()
+    if not guid:
+        return True
+
+    guid_str = guid.lower()
+    base_render = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio\Render"
+    dev_path = rf"{base_render}\{guid_str}"
+    
+    disable_sysfx_key = "{1da5d803-d492-4edd-8c23-e0c0ffee7f0e},5"
+    
+    # 1. Check FxProperties subkey and Properties subkey for explicit disable flag
+    for subkey_name in ("FxProperties", "Properties"):
+        try:
+            full_path = rf"{dev_path}\{subkey_name}"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, full_path) as k:
+                try:
+                    val, _ = winreg.QueryValueEx(k, disable_sysfx_key)
+                    # When Disable_SysFx == 1, user explicitly disabled audio enhancements in Settings
+                    if val == 1:
+                        return False
+                    elif val == 0:
+                        return True
+                except FileNotFoundError:
+                    pass
+        except OSError:
+            pass
+
+    # 2. Check if OEM / Realtek / Microsoft system effects CLSIDs are present in FxProperties
+    try:
+        fx_path = rf"{dev_path}\FxProperties"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, fx_path) as k:
+            num_vals = winreg.QueryInfoKey(k)[1]
+            has_fx_clsid = False
+            for i in range(num_vals):
+                val_name, val_data, _ = winreg.EnumValue(k, i)
+                val_name_lower = val_name.lower()
+                # Check for standard System Effects CLSIDs (PKEY_FX_StreamEffectClsid, etc.)
+                if "d04e05a6" in val_name_lower or "b725f130" in val_name_lower or "system effect" in str(val_data).lower():
+                    has_fx_clsid = True
+                    break
+            if has_fx_clsid:
+                return True
+    except OSError:
+        pass
+
+    # Default to True on modern Windows unless explicitly turned Off
+    return True
+
 def classify_audio_stream_dynamically(pid, hwnd, proc_name):
     """
     Rule-based Windows metadata detection:
-    Determines audio content type (Cinema, Music, Voice, Gaming, Laptop)
+    Determines audio content type (Cinema/Movie, Music, Voice, Gaming)
     from process names, window titles, and window size. Results are heuristic.
     """
     if not proc_name:
@@ -302,16 +405,16 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
     if proc_lower in SENSE_BROWSER_PROCESSES:
         # 1. Voice communications (Discord web, Zoom web, Teams, Meet)
         if any(k in title for k in VOICE_INDICATORS):
-            return "voice_meeting", f"🎙️ {short_name}: Web Call"
+            return "voice", f"🎙️ {short_name}: Web Call"
 
         # 2. Dedicated web music services
         if any(k in title for k in ("youtube music", "soundcloud", "spotify", "pandora", "deezer", "music.apple", "tidal", "bandcamp")):
-            return "bass_beast", f"🎵 {short_name}: Music Stream"
+            return "music", f"🎵 {short_name}: Music Stream"
 
         # 3. Explicit music titles on YouTube / Web Media
         if any(k in title for k in MUSIC_INDICATORS):
             clean_title = title[:24] + "..." if len(title) > 24 else title
-            return "bass_beast", f"🎵 {clean_title if clean_title else short_name}"
+            return "music", f"🎵 {clean_title if clean_title else short_name}"
 
         # 4. Cinema streaming services & explicit movie/trailer keywords
         cinema_stream_indicators = (
@@ -321,7 +424,7 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
         )
         if any(k in title for k in cinema_stream_indicators):
             clean_title = title[:24] + "..." if len(title) > 24 else title
-            return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
+            return "movie", f"🎬 {clean_title if clean_title else short_name}"
 
         # 5. Unclassified browser media (including generic YouTube streams without keywords)
         # Return None, None so the DSP loopback classifier analyzes actual audio waveforms!
@@ -329,30 +432,30 @@ def classify_audio_stream_dynamically(pid, hwnd, proc_name):
 
     # 2. Dedicated Game Platform, Engine & Game Title Keywords
     if any(k in title or k in proc_lower for k in GAMING_INDICATORS):
-        return "fps_gaming", f"{short_name} (💥 Battlefield 360)"
+        return "gaming", f"{short_name} (💥 Battlefield 360)"
 
     # 3. Dynamic Voice / Communication keywords (Higher priority than general playback)
     if proc_lower in SENSE_VOICE_PROCESSES or any(k in title for k in VOICE_INDICATORS):
-        return "voice_meeting", f"🎙️ {short_name}: Voice / Call"
+        return "voice", f"🎙️ {short_name}: Voice / Call"
 
     # 4. Dynamic Music / Audio keywords & Dedicated Music Players
     if proc_lower in SENSE_LOCAL_MUSIC_PROCESSES or any(k in title for k in MUSIC_INDICATORS):
-        return "bass_beast", f"🎵 {short_name}: Music Stream"
+        return "music", f"🎵 {short_name}: Music Stream"
 
     # 5. Multi-format players (VLC, MPC, PotPlayer, KMPlayer): check if audio file before cinema
     audio_extensions = (".mp3", ".flac", ".wav", ".m4a", ".aac", ".ogg", ".opus", ".wma", ".alac")
     if proc_lower in ("vlc.exe", "mpc-hc.exe", "mpc-be.exe", "potplayermini64.exe", "kmplayer.exe"):
         if any(ext in title for ext in audio_extensions) or any(k in title for k in MUSIC_INDICATORS):
-            return "bass_beast", f"🎵 {short_name}: Audio Track"
+            return "music", f"🎵 {short_name}: Audio Track"
 
     # 6. Dynamic Video / Cinema keywords in active window
     if proc_lower in SENSE_LOCAL_VIDEO_PROCESSES or any(k in title for k in VIDEO_INDICATORS):
         clean_title = title[:24] + "..." if len(title) > 24 else title
-        return "cinema_dialogue", f"🎬 {clean_title if clean_title else short_name}"
+        return "movie", f"🎬 {clean_title if clean_title else short_name}"
 
     # 6. Generic streaming fallback only if title or audio was identified
     title_snippet = f": {title[:16]}" if title else ""
-    return "cinema_dialogue", f"🔊 {short_name}{title_snippet}"
+    return "movie", f"🔊 {short_name}{title_snippet}"
 
 def get_dynamic_windows_audio_sources():
     """

@@ -133,33 +133,33 @@ class AppRuleTests(unittest.TestCase):
     def test_local_media_uses_fast_music_profile(self):
         for process in LOCAL_MEDIA_PROCESSES:
             with self.subTest(process=process):
-                self.assertEqual(resolve_fast_profile(process), "bass_beast")
+                self.assertEqual(resolve_fast_profile(process), "music")
 
     def test_game_and_call_rules_map_to_configured_profiles(self):
         self.assertEqual(
-            resolve_fast_profile("a_game.exe", "fps_gaming", game_profile="fps_gaming"),
-            "fps_gaming",
+            resolve_fast_profile("a_game.exe", "gaming", game_profile="gaming"),
+            "gaming",
         )
         self.assertEqual(
-            resolve_fast_profile("teams.exe", speech_profile="voice_meeting"),
-            "voice_meeting",
+            resolve_fast_profile("teams.exe", speech_profile="voice"),
+            "voice",
         )
 
     def test_debouncer_requires_consecutive_observations(self):
         debouncer = ConsensusDebouncer(evaluations=3)
 
-        self.assertIsNone(debouncer.observe("bass_beast"))
-        self.assertIsNone(debouncer.observe("fps_gaming"))
-        self.assertIsNone(debouncer.observe("bass_beast"))
-        self.assertIsNone(debouncer.observe("bass_beast"))
-        self.assertEqual(debouncer.observe("bass_beast"), "bass_beast")
+        self.assertIsNone(debouncer.observe("music"))
+        self.assertIsNone(debouncer.observe("gaming"))
+        self.assertIsNone(debouncer.observe("music"))
+        self.assertIsNone(debouncer.observe("music"))
+        self.assertEqual(debouncer.observe("music"), "music")
 
     def test_idle_observation_resets_pending_consensus(self):
         debouncer = ConsensusDebouncer(evaluations=2)
-        debouncer.observe("bass_beast")
+        debouncer.observe("music")
         self.assertIsNone(debouncer.observe(None))
-        self.assertIsNone(debouncer.observe("bass_beast"))
-        self.assertEqual(debouncer.observe("bass_beast"), "bass_beast")
+        self.assertIsNone(debouncer.observe("music"))
+        self.assertEqual(debouncer.observe("music"), "music")
 
 
 class DaemonIntegrationTests(unittest.TestCase):
@@ -182,7 +182,7 @@ class DaemonIntegrationTests(unittest.TestCase):
 
         self.assertEqual(capture.open_count, 0)
         self.assertEqual(classifier.calls, [])
-        self.assertEqual(daemon.current_profile, "bass_beast")
+        self.assertEqual(daemon.current_profile, "music")
         install.assert_called_once()
 
     def test_browser_only_runs_model_on_new_full_analysis_windows(self):
@@ -206,7 +206,7 @@ class DaemonIntegrationTests(unittest.TestCase):
         self.assertEqual(len(classifier.calls), 3)
         self.assertEqual(classifier.calls[0][0].shape, (16000,))
         self.assertEqual(classifier.calls[0][1], 16000)
-        self.assertEqual(daemon.current_profile, "bass_beast")
+        self.assertEqual(daemon.current_profile, "music")
         install.assert_called_once()
         self.assertEqual(CAPTURE_ANALYSIS_FRAMES, 48000)
 
@@ -223,12 +223,12 @@ class DaemonIntegrationTests(unittest.TestCase):
             foreground_reader=lambda: app,
             debounce=2,
         )
-        daemon.current_profile = "cinema_dialogue"
+        daemon.current_profile = "movie"
         with patch("soniq_sense_daemon.install_apo_config") as install:
             for _ in range(18):
                 daemon.run_iteration()
 
-        self.assertEqual(daemon.current_profile, "cinema_dialogue")
+        self.assertEqual(daemon.current_profile, "movie")
         install.assert_not_called()
 
     def test_cinema_routing_preserves_music_when_active_and_switches_otherwise(self):
@@ -244,22 +244,22 @@ class DaemonIntegrationTests(unittest.TestCase):
             foreground_reader=lambda: app,
             debounce=2,
         )
-        daemon.current_profile = "bass_beast"
+        daemon.current_profile = "music"
         with patch("soniq_sense_daemon.install_apo_config") as install:
             for _ in range(18):
                 daemon.run_iteration()
 
         # Should preserve music profile
-        self.assertEqual(daemon.current_profile, "bass_beast")
+        self.assertEqual(daemon.current_profile, "music")
         install.assert_not_called()
 
-        # From cold/idle, cinema switches to cinema_dialogue (NOT voice_meeting)
+        # From cold/idle, cinema switches to movie (NOT voice)
         daemon.current_profile = None
         with patch("soniq_sense_daemon.install_apo_config") as install:
             for _ in range(18):
                 daemon.run_iteration()
 
-        self.assertEqual(daemon.current_profile, "cinema_dialogue")
+        self.assertEqual(daemon.current_profile, "movie")
         install.assert_called_once()
 
     def test_speech_in_music_hysteresis_delays_switch_to_voice(self):
@@ -275,21 +275,21 @@ class DaemonIntegrationTests(unittest.TestCase):
             foreground_reader=lambda: app,
             debounce=2,
         )
-        daemon.current_profile = "bass_beast"
+        daemon.current_profile = "music"
         with patch("soniq_sense_daemon.install_apo_config") as install:
             # 6 iterations (< 8 hysteresis threshold)
             # note: each block is 4096 frames, analysis window is 48000 frames (hop 24000)
             # so iterations yield classification results
             for _ in range(18):
                 daemon.run_iteration()
-            # Still held on bass_beast due to hysteresis
-            self.assertEqual(daemon.current_profile, "bass_beast")
+            # Still held on music due to hysteresis
+            self.assertEqual(daemon.current_profile, "music")
             install.assert_not_called()
 
             # Now run enough iterations to exceed hysteresis threshold
             for _ in range(100):
                 daemon.run_iteration()
-            self.assertEqual(daemon.current_profile, "voice_meeting")
+            self.assertEqual(daemon.current_profile, "voice")
             install.assert_called_once()
 
 

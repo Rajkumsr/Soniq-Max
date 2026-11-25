@@ -33,13 +33,13 @@ from constants import (
     LEGACY_APO_VST_PLUGIN_NAME, LEGACY_APO_VST_PLUGIN_PATH, LEGACY_LOCAL_VST_PLUGIN_PATH,
     DEFAULT_SENSE_PROFILE_ASSIGNMENTS, SENSE_LOCAL_MUSIC_PROCESSES, SENSE_VOICE_PROCESSES, get_asset_dir,
     get_base_dir, resolve_sense_profile,
-    should_classify_browser_audio, validate_profile_data
+    should_classify_browser_audio, validate_profile_data, LEGACY_PROFILE_KEY_MAP
 )
 from windows_audio import (
     get_active_windows_output_device, classify_audio_stream_dynamically,
     get_dynamic_windows_audio_sources,
     WindowsEndpointWatcher, get_process_name_by_pid,
-    get_hwnd_for_process_family
+    get_hwnd_for_process_family, is_device_default_effects_active
 )
 from hotkey_manager import GlobalHotkeyManager
 from system_tray import SystemTrayService
@@ -148,7 +148,7 @@ class SoniqDesktopApp(ctk.CTk):
 
         # Core State
         self.profiles = copy.deepcopy(DEFAULT_PROFILES)
-        self.active_profile_key = "cinema_dialogue"
+        self.active_profile_key = "music"
         self.is_enhanced = True
         self.night_mode = False
         self.auto_app_enabled = True
@@ -236,7 +236,8 @@ class SoniqDesktopApp(ctk.CTk):
             if not isinstance(data, dict):
                 raise ValueError("Settings file must contain a JSON object.")
 
-            profile_key = data.get("active_profile", "cinema_dialogue")
+            profile_key = data.get("active_profile", "music")
+            profile_key = LEGACY_PROFILE_KEY_MAP.get(profile_key, profile_key)
             if isinstance(profile_key, str) and profile_key in self.profiles:
                 self.active_profile_key = profile_key
             else:
@@ -363,7 +364,7 @@ class SoniqDesktopApp(ctk.CTk):
         self._write_json_atomically(CUSTOM_PRESETS_FILE, custom_only)
         if getattr(self, "tab_smart", None):
             self.tab_smart.refresh_profile_choices()
-        self.select_profile("cinema_dialogue", apply_system=True)
+        self.select_profile("music", apply_system=True)
         if getattr(self, "tab_audio", None):
             self.tab_audio.render_profiles(self.profiles, self.active_profile_key)
         self.lbl_status.configure(
@@ -883,6 +884,7 @@ class SoniqDesktopApp(ctk.CTk):
         if not self.is_enhanced:
             apo_text = "# SONIQ MAX: BYPASSED (other APO config remains active)\nPreamp: 0.0 dB\n"
         else:
+            is_dev_fx = self.is_device_default_effects_active()
             apo_text = generate_apo_config(
                 preset_name=p["title"],
                 eq_gains=p.get("eq", [0.0]*10),
@@ -890,6 +892,7 @@ class SoniqDesktopApp(ctk.CTk):
                 night_mode=(self.night_mode and enabled_effects["volume"]),
                 is_headphone=self.effective_is_headphone,
                 vst_plugins=vst_plugins,
+                device_effects_active=is_dev_fx,
             )
 
         local_cfg = os.path.join(get_base_dir(), "SONIQ_APO_Config.txt")
@@ -1007,6 +1010,12 @@ class SoniqDesktopApp(ctk.CTk):
                 icon="🔊",
             )
 
+    def is_device_default_effects_active(self):
+        try:
+            return is_device_default_effects_active()
+        except Exception:
+            return True
+
     def refresh_audio_endpoint_ui(self):
         dev_name, is_hp = get_active_windows_output_device()
         self.update_endpoint_pill(dev_name, is_hp)
@@ -1015,6 +1024,7 @@ class SoniqDesktopApp(ctk.CTk):
         self.current_device_name = dev_name
         self.is_headphone = is_hp
         eff_hp = self.effective_is_headphone
+        is_dev_fx = self.is_device_default_effects_active()
 
         if hasattr(self, "audio_content_monitor") and self.auto_app_enabled:
             self.audio_content_monitor.reconnect()
@@ -1028,9 +1038,11 @@ class SoniqDesktopApp(ctk.CTk):
             pill_text = f"🎧 {dev_name[:22]}"
             dot_color = THEME["accent_green"]
         else:
-            mode_desc = "Laptop Speakers (Anti-Rattle 120Hz)"
+            mode_desc = "Laptop Speakers (Anti-Rattle 65Hz)"
             pill_text = f"🔊 {dev_name[:24]}"
             dot_color = THEME["accent_gold"]
+
+        fx_mode_text = "🛡️ Win Effects: ON" if is_dev_fx else "⚡ Win Effects: OFF (Auto-Fallback Active)"
 
         if getattr(self, "is_window_visible", True):
             if hasattr(self, "lbl_device_pill"):
@@ -1040,6 +1052,7 @@ class SoniqDesktopApp(ctk.CTk):
             if hasattr(self, "tab_smart") and self.tab_smart:
                 self.tab_smart.update_endpoint_display(dev_name, eff_hp, self.force_full_range)
             if hasattr(self, "lbl_status"):
+                self.lbl_status.configure(text=f"Endpoint: {dev_name} → {mode_desc} | {fx_mode_text}", text_color=THEME["accent_gold"])
                 self.lbl_status.configure(text=f"Endpoint: {dev_name} → {mode_desc}", text_color=THEME["accent_gold"])
 
         self.apply_to_system_audio()
@@ -1243,7 +1256,7 @@ class SoniqDesktopApp(ctk.CTk):
                 elif analysis and analysis.category == "gaming":
                     content_target = self.sense_profile_assignments["gaming"]
                 elif analysis and analysis.category == "cinema":
-                    content_target = self.sense_profile_for_detected_target("cinema_dialogue")
+                    content_target = self.sense_profile_for_detected_target("movie")
                 elif analysis and analysis.category == "speech":
                     content_target = self.sense_profile_assignments["speech"]
                 elif analysis and analysis.category == "music":
@@ -1259,11 +1272,11 @@ class SoniqDesktopApp(ctk.CTk):
 
                 # Priority 1: Active Voice Call (Discord, Zoom, Teams, Skype, WhatsApp)
                 # Voice intelligibility for live calls always takes precedence
-                if active_voice_src or fg_target == "voice_meeting":
+                if active_voice_src or fg_target in ("voice", "voice_meeting"):
                     chosen_target = self.sense_profile_assignments["speech"]
 
                 # Priority 2: Active 3D Fullscreen / Borderless Game or Dedicated Game Engine
-                elif fg_target == "fps_gaming":
+                elif fg_target in ("gaming", "fps_gaming"):
                     chosen_target = self.sense_profile_assignments["gaming"]
 
                 # Priority 3: Active Media Player or Browser Media Stream
@@ -1281,9 +1294,9 @@ class SoniqDesktopApp(ctk.CTk):
                     )
                     if local_music_playing:
                         chosen_target = self.sense_profile_assignments["music"]
-                    elif bg_target == "fps_gaming":
+                    elif bg_target in ("gaming", "fps_gaming"):
                         chosen_target = self.sense_profile_assignments["gaming"]
-                    elif bg_target in ("cinema_dialogue", "bass_beast", "voice_meeting"):
+                    elif bg_target in ("movie", "music", "voice", "cinema_dialogue", "bass_beast", "voice_meeting"):
                         chosen_target = self.sense_profile_for_detected_target(bg_target)
                     elif content_target:
                         chosen_target = content_target
@@ -1295,7 +1308,7 @@ class SoniqDesktopApp(ctk.CTk):
                     chosen_target = content_target
 
                 # Priority 5: Foreground dedicated media app
-                elif fg_target and fg_target in ("cinema_dialogue", "bass_beast"):
+                elif fg_target and fg_target in ("movie", "music", "cinema_dialogue", "bass_beast"):
                     chosen_target = self.sense_profile_for_detected_target(fg_target)
 
                 elif analysis and analysis.category == "other" and cached_active_src:
@@ -1380,10 +1393,10 @@ class SoniqDesktopApp(ctk.CTk):
     def on_hotkey_triggered(self, action):
         """Thread-safe handler for registered Win32 global hotkeys."""
         profile_keys = [
-            "cinema_dialogue",
-            "bass_beast",
-            "fps_gaming",
-            "voice_meeting",
+            "music",
+            "movie",
+            "gaming",
+            "voice",
         ]
 
         if action == "toggle_bypass":

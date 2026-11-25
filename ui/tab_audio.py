@@ -49,7 +49,7 @@ class AudioTab(ctk.CTkFrame):
 
         self.hero_icon = ctk.CTkLabel(
             hero_left,
-            text="🎬",
+            text="🎵",
             font=ctk.CTkFont(family="Segoe UI", size=22)
         )
         self.hero_icon.pack(side="left", padx=(0, 10))
@@ -62,7 +62,7 @@ class AudioTab(ctk.CTkFrame):
 
         self.hero_title = ctk.CTkLabel(
             hero_row,
-            text="CINEMA & DIALOGUE",
+            text="MUSIC",
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
             text_color=THEME["text_main"]
         )
@@ -70,7 +70,7 @@ class AudioTab(ctk.CTkFrame):
 
         self.hero_badge = ctk.CTkLabel(
             hero_row,
-            text="MOVIES / OTT",
+            text="HI-FI / BASS",
             font=ctk.CTkFont(family="Segoe UI", size=9, weight="bold"),
             fg_color=THEME["pill_bg"],
             text_color=THEME["accent_gold"],
@@ -82,7 +82,7 @@ class AudioTab(ctk.CTkFrame):
 
         self.hero_desc = ctk.CTkLabel(
             hero_title_box,
-            text="A dialogue-focused EQ curve with added presence and a moderate stereo channel mix.",
+            text="Hi-Fi psychoacoustic bass synthesis and crystal clarity with a balanced soundstage.",
             font=ctk.CTkFont(family="Segoe UI", size=10),
             text_color=THEME["text_dim"],
             anchor="w"

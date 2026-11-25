@@ -40,6 +40,7 @@ using SoniqAudio::kParamEQ_4kHz;
 using SoniqAudio::kParamEQ_8kHz;
 using SoniqAudio::kParamEQ_16kHz;
 using SoniqAudio::kParamSpeakerHPF;
+using SoniqAudio::kParamDeviceEffectsActive;
 
 #if defined(_WIN32)
 #define VST_EXPORT __declspec(dllexport)
@@ -154,6 +155,7 @@ public:
                     case SoniqAudio::kParamEQ_8kHz: std::strncpy(static_cast<char*>(ptr), "EQ8kHz", 31); return 1;
                     case SoniqAudio::kParamEQ_16kHz: std::strncpy(static_cast<char*>(ptr), "EQ16kHz", 31); return 1;
                     case SoniqAudio::kParamSpeakerHPF: std::strncpy(static_cast<char*>(ptr), "SpeakerHPF", 31); return 1;
+                    case SoniqAudio::kParamDeviceEffectsActive: std::strncpy(static_cast<char*>(ptr), "DeviceEffectsActive", 31); return 1;
                 }
                 return 0;
             case effGetParamLabel:
@@ -166,7 +168,8 @@ public:
                     case SoniqAudio::kParamBassEnable:
                     case SoniqAudio::kParamClarityEnable:
                     case SoniqAudio::kParamSpatialEnable:
-                    case SoniqAudio::kParamSpeakerHPF: std::strncpy(static_cast<char*>(ptr), "On/Off", 31); return 1;
+                    case SoniqAudio::kParamSpeakerHPF:
+                    case SoniqAudio::kParamDeviceEffectsActive: std::strncpy(static_cast<char*>(ptr), "On/Off", 31); return 1;
                     case SoniqAudio::kParamMasterGain: std::strncpy(static_cast<char*>(ptr), "x", 31); return 1;
                     case SoniqAudio::kParamSpatialMode: std::strncpy(static_cast<char*>(ptr), "Mode", 31); return 1;
                     case SoniqAudio::kParamCeiling: std::strncpy(static_cast<char*>(ptr), "Linear", 31); return 1;

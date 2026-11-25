@@ -129,52 +129,60 @@ def build_windows_fluent_theme():
 # Windows Native Fluent Theme Palette
 THEME = build_windows_fluent_theme()
 
-# 4 Built-In Default Profiles
+# 4 Streamlined Core Built-In Profiles
 DEFAULT_PROFILES = {
-    "cinema_dialogue": {
-        "title": "Cinema & Dialogue",
+    "music": {
+        "title": "Music",
+        "icon": "🎵",
+        "badge": "HI-FI / BASS",
+        "desc": "Hi-Fi psychoacoustic bass synthesis and crystal clarity with a balanced soundstage.",
+        "bass": 80,
+        "clarity": 60,
+        "spatial": 135,
+        "volume": 3.5,
+        "eq": [1.0, 2.0, 1.0, 0.0, -0.5, 0.5, 1.0, 1.5, 2.0, 1.5]
+    },
+    "movie": {
+        "title": "Movie",
         "icon": "🎬",
-        "badge": "MOVIES / OTT",
-        "desc": "A dialogue-focused EQ curve with added presence and a moderate stereo channel mix.",
-        "bass": 60,
+        "badge": "CINEMA / DIALOGUE",
+        "desc": "Optimized dialogue clarity contour (2.9 kHz) and expanded cinematic stereo soundstage.",
+        "bass": 55,
         "clarity": 90,
-        "spatial": 190,
+        "spatial": 180,
         "volume": 4.0,
-        "eq": [-1.0, 1.0, 2.0, -2.0, 1.5, 3.5, 5.0, 4.0, 3.0, 2.0]
+        "eq": [-1.0, 0.5, 1.0, -1.0, 1.0, 2.5, 3.5, 2.5, 1.5, 1.0]
     },
-    "bass_beast": {
-        "title": "Bass & EDM Beast",
-        "icon": "⚡",
-        "badge": "DEEP LOW-END",
-        "desc": "An EQ curve emphasizing bass and treble for electronic music. High boosts may cause distortion on some devices.",
-        "bass": 95,
-        "clarity": 50,
-        "spatial": 140,
-        "volume": 3.0,
-        "eq": [4.0, 6.0, 5.0, 0.0, -1.0, 0.0, 2.0, 3.0, 4.5, 4.0]
-    },
-    "fps_gaming": {
-        "title": "Battlefield 360",
+    "gaming": {
+        "title": "Gaming",
         "icon": "💥",
         "badge": "360° COMBAT",
-        "desc": "An EQ curve emphasizing upper-mid frequencies for game audio. Results depend on the game and playback device.",
-        "bass": 40,
+        "desc": "Pinpoint positional footsteps and directional imaging with high-transient presence.",
+        "bass": 45,
         "clarity": 85,
-        "spatial": 220,
+        "spatial": 210,
         "volume": 4.5,
-        "eq": [-2.0, 0.0, 1.0, -1.0, 2.0, 4.5, 6.0, 5.0, 3.5, 2.0]
+        "eq": [-1.5, 0.0, 0.5, -0.5, 1.5, 3.0, 4.0, 3.5, 2.5, 1.5]
     },
-    "voice_meeting": {
-        "title": "Zoom & Meeting",
+    "voice": {
+        "title": "Voice",
         "icon": "🎙️",
         "badge": "CALLS / STUDY",
-        "desc": "Reduces some low-frequency content and emphasizes vocal-presence frequencies for calls and speech.",
+        "desc": "Clean vocal focus with 300 Hz mud notch and reduced low-end boom for meetings and speech.",
         "bass": 10,
         "clarity": 95,
-        "spatial": 110,
+        "spatial": 105,
         "volume": 5.0,
-        "eq": [-6.0, -3.0, 0.0, -2.0, 2.0, 4.0, 5.0, 3.0, 1.0, -2.0]
+        "eq": [-4.0, -2.0, 0.0, -1.5, 1.5, 3.0, 3.5, 2.0, 0.5, -1.0]
     }
+}
+
+# Legacy key mapping for seamless migration and backward compatibility
+LEGACY_PROFILE_KEY_MAP = {
+    "cinema_dialogue": "movie",
+    "bass_beast": "music",
+    "fps_gaming": "gaming",
+    "voice_meeting": "voice",
 }
 
 SENSE_BROWSER_PROCESSES = frozenset({
@@ -272,27 +280,36 @@ def should_classify_browser_audio(session_process_names):
 
 
 DEFAULT_SENSE_PROFILE_ASSIGNMENTS = {
-    "gaming": "fps_gaming",
-    "music": "bass_beast",
-    "speech": "cinema_dialogue",
-    "other": "cinema_dialogue",
+    "gaming": "gaming",
+    "music": "music",
+    "speech": "voice",
+    "other": "movie",
 }
 
 SENSE_TARGET_CATEGORIES = {
-    "fps_gaming": "gaming",
     "gaming": "gaming",
+    "fps_gaming": "gaming",
+    "voice": "speech",
     "voice_meeting": "speech",
-    "cinema_dialogue": "speech",
+    "movie": "speech",
     "cinema": "speech",
-    "bass_beast": "music",
+    "cinema_dialogue": "speech",
     "music": "music",
+    "bass_beast": "music",
     "other": "other",
 }
 
 
 def resolve_sense_profile(target, assignments):
     """Apply a user's Soniq Sense preset assignment to a detected target."""
-    category = SENSE_TARGET_CATEGORIES.get(target)
+    normalized_target = LEGACY_PROFILE_KEY_MAP.get(target, target)
+    category = SENSE_TARGET_CATEGORIES.get(target) or SENSE_TARGET_CATEGORIES.get(normalized_target)
+    if not category:
+        return target
+    if not isinstance(assignments, dict):
+        return target
+    assigned = assignments.get(category, target)
+    return LEGACY_PROFILE_KEY_MAP.get(assigned, assigned)
     if category is None:
         return target
     return assignments.get(category, target)

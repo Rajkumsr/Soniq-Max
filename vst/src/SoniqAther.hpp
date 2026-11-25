@@ -30,7 +30,7 @@
 
 namespace SoniqAudio {
 
-static constexpr int NUM_PARAMS = 23;
+static constexpr int NUM_PARAMS = 24;
 static constexpr uint32_t PLUGIN_UNIQUE_ID = 0x53714D78; // 'SqMx'
 
 // Standard 10 Graphic Equalizer Center Frequencies (Hz)
@@ -68,8 +68,9 @@ enum ParamIndex {
     kParamEQ_8kHz = 20,     // Band 8: 8000 Hz
     kParamEQ_16kHz = 21,    // Band 9: 16000 Hz
 
-    // Device Acoustic Routing
-    kParamSpeakerHPF = 22   // Speaker 120 Hz HPF (0.0 = Off / Full Range, 1.0 = On / Laptop Speakers)
+    // Device Acoustic Routing & Windows DSP Optimization
+    kParamSpeakerHPF = 22,   // Speaker 65 Hz HPF (0.0 = Off / Full Range, 1.0 = On / Laptop Speakers)
+    kParamDeviceEffectsActive = 23 // Windows Device Default Effects State (1.0 = ON, 0.0 = OFF / Auto-Fallback)
 };
 
 // 2nd-order Audio EQ Cookbook Biquad Filter with NaN/denormal protection
@@ -280,6 +281,7 @@ public:
         }
 
         params[kParamSpeakerHPF] = 0.0f;  // OFF by default (Full-range)
+        params[kParamDeviceEffectsActive] = 0.0f; // Direct/Fallback mode
 
         reset();
         recalculateSampleRateDependent();
@@ -348,8 +350,8 @@ public:
         // One-pole parameter smoothing (~25 Hz cutoff, ~30 ms response)
         smoothCoef = 1.0f - std::exp(-2.0f * 3.14159265f * 25.0f / sampleRate);
 
-        // 120 Hz Subsonic Highpass for laptop speakers
-        speakerHPFilter.setHighPass(120.0f, sampleRate, 0.7071f);
+        // 65 Hz Subsonic Highpass for laptop speakers (clean low-end extension without rattle)
+        speakerHPFilter.setHighPass(65.0f, sampleRate, 0.7071f);
 
         // 10-Band Parametric EQ
         for (int i = 0; i < 10; ++i) {
@@ -416,9 +418,23 @@ public:
         const bool bassOn = params[kParamBassEnable] > 0.5f;
         const bool clarityOn = params[kParamClarityEnable] > 0.5f;
         const bool spatialOn = params[kParamSpatialEnable] > 0.5f;
-        const bool limiterOn = params[kParamLimiter] > 0.5f;
-        const bool hrtfOn = params[kParamSpatialMode] > 0.5f;
-        const bool speakerHPFOn = params[kParamSpeakerHPF] > 0.5f;
+        const bool deviceEffectsOn = params[kParamDeviceEffectsActive] > 0.5f;
+
+        // Auto-fallback: When Windows Device Default Effects is ON, Realtek's OEM high-pass
+        // curve is active at driver level. Bypassing prevents double-filtering and loss of punch.
+        // When Device Default Effects is OFF, SoniqMax auto-engages the 65 Hz filter.
+        const bool speakerHPFRequested = params[kParamSpeakerHPF] > 0.5f;
+        const bool speakerHPFEffective = (!deviceEffectsOn && speakerHPFRequested);
+
+        // Auto-fallback: When Windows Device Default Effects is ON, driver-level DRC/limiting
+        // is active. Bypassing prevents double-compression, squashing, and volume drops.
+        // When Device Default Effects is OFF, SoniqMax auto-engages the lookahead peak limiter.
+        const bool limiterRequested = params[kParamLimiter] > 0.5f;
+        const bool limiterEffective = (!deviceEffectsOn && limiterRequested);
+
+        // When Device Default Effects is ON, Realtek spatialization or Windows Sonic may run;
+        // HRTF cross-feed is bypassed to prevent comb-filtering and phase smearing.
+        const bool hrtfOn = (!deviceEffectsOn && (params[kParamSpatialMode] > 0.5f));
         const float ceiling = std::max(0.50f, std::min(1.0f, params[kParamCeiling]));
 
         for (int i = 0; i < sampleFrames; ++i) {
@@ -439,8 +455,8 @@ public:
             l *= smoothedPreampGain;
             r *= smoothedPreampGain;
 
-            // 2. Speaker 120 Hz Subsonic Highpass Filter (Laptop Speakers)
-            if (speakerHPFOn) {
+            // 2. Speaker 65 Hz Subsonic Highpass Filter (Auto-Fallback Laptop Speakers)
+            if (speakerHPFEffective) {
                 l = speakerHPFilter.process(0, l);
                 r = speakerHPFilter.process(1, r);
             }
@@ -523,8 +539,8 @@ public:
             l *= smoothedMasterGain;
             r *= smoothedMasterGain;
 
-            // 8. True Lookahead Peak Limiter
-            if (limiterOn) {
+            // 8. True Lookahead Peak Limiter (Auto-Fallback)
+            if (limiterEffective) {
                 lookaheadBufL[lookaheadWriteIdx] = l;
                 lookaheadBufR[lookaheadWriteIdx] = r;
 

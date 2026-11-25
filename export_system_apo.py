@@ -169,6 +169,7 @@ def generate_apo_config(
     night_mode=False,
     is_headphone=False,
     vst_plugins=None,
+    device_effects_active=True,
 ):
     """
     Generate Equalizer APO configuration.
@@ -188,8 +189,8 @@ def generate_apo_config(
     _validate_number("Clarity level", clarity, 0, 1)
     _validate_number("Stereo width", spatial_width, 1, 2.5)
     _validate_number("Volume level", volume_boost_db, 0, 12)
-    if type(night_mode) is not bool or type(is_headphone) is not bool:
-        raise ValueError("night_mode and is_headphone must be boolean values.")
+    if type(night_mode) is not bool or type(is_headphone) is not bool or type(device_effects_active) is not bool:
+        raise ValueError("night_mode, is_headphone, and device_effects_active must be boolean values.")
 
     is_vst_mode = bool(vst_plugins)
     effective_boost = volume_boost_db - (2.0 if night_mode else 0.0)
@@ -198,10 +199,12 @@ def generate_apo_config(
     )
     preamp = min(4.0, effective_boost - estimated_peak_gain)
     device_tag = "Headphones" if is_headphone else "Speakers"
+    dev_fx_status = "Enabled (SoniqMax Optimized)" if device_effects_active else "Disabled (Auto-Fallback Limiter & 65Hz HPF Engaged)"
 
     lines = [
         f"# SONIQ MAX profile: {preset_name}",
         f"# Output mode: {device_tag}",
+        f"# Windows Device Default Effects: {dev_fx_status}",
     ]
 
     if is_vst_mode:
@@ -219,6 +222,7 @@ def generate_apo_config(
         norm_limiter = 1.0
         norm_master = 1.0
         speaker_hpf_val = 0.0 if is_headphone else 1.0
+        dev_fx_val = 1.0 if device_effects_active else 0.0
 
         eq_tokens = " ".join([
             f"EQ{token} {gain:+.1f}"
@@ -230,7 +234,7 @@ def generate_apo_config(
                 f'VSTPlugin: Library "{plugin}" Bass {norm_bass:.4f} Clarity {norm_clarity:.4f} '
                 f'Spatial {norm_spatial:.4f} Limiter {norm_limiter:.1f} MasterGain {norm_master:.4f} '
                 f'Preamp {preamp:+.1f} EQEnable 1.0 BassEnable 1.0 ClarityEnable 1.0 SpatialEnable 1.0 '
-                f'{eq_tokens} SpeakerHPF {speaker_hpf_val:.1f}'
+                f'{eq_tokens} SpeakerHPF {speaker_hpf_val:.1f} DeviceEffectsActive {dev_fx_val:.1f}'
             )
     else:
         # APO-only fallback mode: static biquad approximations and software preamp
@@ -239,7 +243,10 @@ def generate_apo_config(
             "",
         ])
         if not is_headphone:
-            lines.extend(("# Low-frequency high-pass filter (120 Hz)", "Filter: ON HP Fc 120 Hz", ""))
+            if not device_effects_active:
+                lines.extend(("# Low-frequency high-pass filter (65 Hz auto-fallback)", "Filter: ON HP Fc 65 Hz", ""))
+            else:
+                lines.extend(("# Device default effects active: speaker protection handled by OEM driver", ""))
         else:
             lines.extend(("# Headphone mode: no speaker high-pass filter", ""))
 

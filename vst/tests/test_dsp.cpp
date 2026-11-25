@@ -464,6 +464,53 @@ void testNaNAndInvalidFloatResilience() {
     TEST_ASSERT(cleanOutput, "Effect safely sanitizes NaNs and Infs with zero propagation");
 }
 
+void testDeviceEffectsOptimizationAndAutoFallback() {
+    printHeader("Test 12: Windows Device Default Effects Optimization & Auto-Fallback");
+    SoniqMaxEffect effect;
+    effect.sampleRate = 48000.0f;
+    effect.params[kParamBass] = 0.0f;
+    effect.params[kParamClarity] = 0.0f;
+    effect.params[kParamSpatial] = 0.0f;
+    effect.params[kParamLimiter] = 1.0f;
+    effect.params[kParamSpeakerHPF] = 1.0f;
+    effect.params[kParamCeiling] = 0.9772f;
+
+    // Case A: Device Default Effects = ON (1.0f)
+    // Redundant stages (Limiter & Speaker HPF) must be bypassed to avoid double-compression/comb-filtering
+    effect.params[kParamDeviceEffectsActive] = 1.0f;
+    effect.recalculateSampleRateDependent();
+    effect.updateFilters();
+
+    const int N = 1024;
+    std::vector<float> l(N, 1.5f); // +3.5 dB overload
+    std::vector<float> r(N, 1.5f);
+    processBuffer(effect, l, r, 128);
+
+    // With limiter bypassed, output passes uncompressed
+    float maxPeakEffectsOn = 0.0f;
+    for (int i = 256; i < N; ++i) {
+        maxPeakEffectsOn = std::max(maxPeakEffectsOn, std::abs(l[i]));
+    }
+    TEST_ASSERT(maxPeakEffectsOn > 1.0f, "Auto-fallback cleanly bypasses redundant limiter when Device Effects = ON");
+
+    // Case B: Device Default Effects = OFF (0.0f)
+    // Auto-fallback engages: Limiter clamps peaks strictly below ceiling (-0.2 dBFS)
+    effect.reset();
+    effect.params[kParamDeviceEffectsActive] = 0.0f;
+    effect.recalculateSampleRateDependent();
+    effect.updateFilters();
+
+    std::fill(l.begin(), l.end(), 1.5f);
+    std::fill(r.begin(), r.end(), 1.5f);
+    processBuffer(effect, l, r, 128);
+
+    float maxPeakEffectsOff = 0.0f;
+    for (int i = 256; i < N; ++i) {
+        maxPeakEffectsOff = std::max(maxPeakEffectsOff, std::abs(l[i]));
+    }
+    TEST_ASSERT(maxPeakEffectsOff <= 0.9775f, "Auto-fallback engages lookahead limiter strictly below ceiling when Device Effects = OFF");
+}
+
 int main() {
     std::cout << "\n======================================================\n";
     std::cout << "  SONIQ MAX PRO — NATIVE C++ DSP VERIFICATION TARGET  \n";
@@ -480,6 +527,7 @@ int main() {
     testSampleRateMatrix();
     testBlockSizeMatrix();
     testNaNAndInvalidFloatResilience();
+    testDeviceEffectsOptimizationAndAutoFallback();
 
     std::cout << "\n======================================================\n";
     std::cout << "  NATIVE TEST SUMMARY: " << g_passedTests << " / " << g_totalTests << " PASSED\n";

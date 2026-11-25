@@ -27,29 +27,32 @@ class ProfileValidationTests(unittest.TestCase):
             validate_profile_data(profile)
 
     def test_rejects_invalid_eq_gain(self):
-        profile = copy.deepcopy(DEFAULT_PROFILES["cinema_dialogue"])
+        profile = copy.deepcopy(DEFAULT_PROFILES["movie"])
         profile["eq"][0] = 13
         with self.assertRaisesRegex(ValueError, "between -12 and \\+12"):
             validate_profile_data(profile)
 
     def test_rejects_boolean_as_numeric_value(self):
-        profile = copy.deepcopy(DEFAULT_PROFILES["cinema_dialogue"])
+        profile = copy.deepcopy(DEFAULT_PROFILES["movie"])
         profile["bass"] = True
         with self.assertRaisesRegex(ValueError, "must be a number"):
             validate_profile_data(profile)
 
     def test_soniq_sense_assignments_override_detected_category_defaults(self):
         assignments = {
-            "gaming": "fps_gaming",
-            "music": "cinema_dialogue",
-            "speech": "bass_beast",
-            "other": "voice_meeting",
+            "gaming": "gaming",
+            "music": "movie",
+            "speech": "voice",
+            "other": "music",
         }
 
-        self.assertEqual(resolve_sense_profile("fps_gaming", assignments), "fps_gaming")
-        self.assertEqual(resolve_sense_profile("bass_beast", assignments), "cinema_dialogue")
-        self.assertEqual(resolve_sense_profile("voice_meeting", assignments), "bass_beast")
-        self.assertEqual(resolve_sense_profile("other", assignments), "voice_meeting")
+        self.assertEqual(resolve_sense_profile("gaming", assignments), "gaming")
+        self.assertEqual(resolve_sense_profile("fps_gaming", assignments), "gaming")
+        self.assertEqual(resolve_sense_profile("music", assignments), "movie")
+        self.assertEqual(resolve_sense_profile("bass_beast", assignments), "movie")
+        self.assertEqual(resolve_sense_profile("voice", assignments), "voice")
+        self.assertEqual(resolve_sense_profile("voice_meeting", assignments), "voice")
+        self.assertEqual(resolve_sense_profile("other", assignments), "music")
         self.assertEqual(resolve_sense_profile("unknown_target", assignments), "unknown_target")
 
     def test_soniq_sense_runs_content_classifier_only_for_browser_sessions(self):
@@ -66,7 +69,7 @@ class ProfileValidationTests(unittest.TestCase):
 
 class ApoConfigTests(unittest.TestCase):
     def test_selected_profile_values_do_not_depend_on_old_slider_values(self):
-        profile = DEFAULT_PROFILES["cinema_dialogue"]
+        profile = DEFAULT_PROFILES["movie"]
         values = profile_filter_values(
             profile,
             {"bass": True, "clarity": True, "spatial": True, "volume": True},
@@ -79,7 +82,7 @@ class ApoConfigTests(unittest.TestCase):
 
     def test_disabled_effects_generate_neutral_filter_values(self):
         values = profile_filter_values(
-            DEFAULT_PROFILES["cinema_dialogue"],
+            DEFAULT_PROFILES["movie"],
             {"bass": False, "clarity": False, "spatial": False, "volume": False},
         )
 
@@ -95,13 +98,13 @@ class ApoConfigTests(unittest.TestCase):
 
     def test_generates_speaker_and_headphone_configs(self):
         gains = [0.0] * 10
-        speaker = generate_apo_config("Test", gains, 0.5, 0.5, 1.5, 4.0)
+        speaker = generate_apo_config("Test", gains, 0.5, 0.5, 1.5, 4.0, device_effects_active=False)
         headphones = generate_apo_config(
-            "Test", gains, 0.5, 0.5, 1.5, 4.0, is_headphone=True
+            "Test", gains, 0.5, 0.5, 1.5, 4.0, is_headphone=True, device_effects_active=False
         )
 
-        self.assertIn("Filter: ON HP Fc 120 Hz", speaker)
-        self.assertNotIn("Filter: ON HP Fc 120 Hz", headphones)
+        self.assertIn("Filter: ON HP Fc 65 Hz", speaker)
+        self.assertNotIn("Filter: ON HP Fc 65 Hz", headphones)
         self.assertIn("static eq with estimated peak headroom compensation", speaker.lower())
         self.assertIn("no dynamic limiter or compressor", speaker.lower())
         self.assertIn("does not synthesize harmonics", speaker.lower())
@@ -173,15 +176,16 @@ class ApoConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "line breaks"):
             generate_apo_config("Test\nPreamp: +20 dB", [0.0] * 10, 0.0, 0.0, 1.0, 0.0)
 
-    def test_checked_in_local_config_matches_battlefield_profile(self):
-        profile = DEFAULT_PROFILES["fps_gaming"]
+    def test_checked_in_local_config_matches_gaming_profile(self):
+        profile = DEFAULT_PROFILES["gaming"]
         expected = generate_apo_config(
-            "Battlefield 360",
+            "Gaming",
             profile["eq"],
             profile["bass"] / 100,
             profile["clarity"] / 100,
             profile["spatial"] / 100,
             profile["volume"],
+            device_effects_active=True,
         )
         actual = (Path(__file__).resolve().parents[1] / "SONIQ_APO_Config.txt").read_text(
             encoding="utf-8"
@@ -227,6 +231,7 @@ class ApoConfigTests(unittest.TestCase):
         self.assertIn("Bass 0.5000", config)
         self.assertIn("Clarity 0.5000", config)
         self.assertIn("Limiter 1.0", config)
+        self.assertIn("DeviceEffectsActive 1.0", config)
 
     def test_vst_mode_eliminates_duplicate_processing(self):
         # In VST mode, SoniqMaxDSP owns all 10-band EQ, Preamp, bass, clarity, and spatial processing.
@@ -254,6 +259,7 @@ class ApoConfigTests(unittest.TestCase):
         self.assertIn("Preamp ", config)
         self.assertIn("EQEnable 1.0", config)
         self.assertIn("SpeakerHPF 1.0", config)
+        self.assertIn("DeviceEffectsActive 1.0", config)
 
         # Static tone shaping MUST be omitted (no duplicate processing!)
         self.assertNotIn("Filter: ON LSC 6 dB Fc 200 Hz", config)
@@ -305,6 +311,43 @@ class ApoConfigTests(unittest.TestCase):
                 "Include: SONIQ_MAX_Config.txt",
                 Path(main_config).read_text(encoding="utf-8"),
             )
+
+    def test_windows_device_effects_auto_fallback_apo_generation(self):
+        # Case A: Device Default Effects = ON (Realtek/Windows enhancements running)
+        cfg_on = generate_apo_config(
+            "Effects ON Mode",
+            [0.0] * 10,
+            bass_boost=0.5,
+            clarity=0.5,
+            spatial_width=1.2,
+            volume_boost_db=3.0,
+            device_effects_active=True,
+            vst_plugins=None,
+        )
+        self.assertIn("Windows Device Default Effects: Enabled (SoniqMax Optimized)", cfg_on)
+        self.assertIn("speaker protection handled by OEM driver", cfg_on)
+        self.assertNotIn("Filter: ON HP Fc 65 Hz", cfg_on)
+
+        # Case B: Device Default Effects = OFF (Auto-fallback mode engages)
+        cfg_off = generate_apo_config(
+            "Effects OFF Mode",
+            [0.0] * 10,
+            bass_boost=0.5,
+            clarity=0.5,
+            spatial_width=1.2,
+            volume_boost_db=3.0,
+            device_effects_active=False,
+            vst_plugins=None,
+        )
+        self.assertIn("Windows Device Default Effects: Disabled (Auto-Fallback Limiter & 65Hz HPF Engaged)", cfg_off)
+        self.assertIn("Filter: ON HP Fc 65 Hz", cfg_off)
+
+    def test_device_default_effects_registry_detection(self):
+        from windows_audio import is_device_default_effects_active, get_default_render_guid
+        guid = get_default_render_guid()
+        self.assertTrue(guid is None or (isinstance(guid, str) and guid.startswith("{") and guid.endswith("}")))
+        res = is_device_default_effects_active()
+        self.assertIsInstance(res, bool)
 
 
 if __name__ == "__main__":

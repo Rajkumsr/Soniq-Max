@@ -69,8 +69,8 @@ def read_foreground_app():
     return ForegroundApp(process_name.lower(), process_id.value, int(hwnd))
 
 
-def resolve_fast_profile(process_name, detected_profile=None, music_profile="bass_beast",
-                         speech_profile="voice_meeting", game_profile="fps_gaming"):
+def resolve_fast_profile(process_name, detected_profile=None, music_profile="music",
+                         speech_profile="voice", game_profile="gaming"):
     """Map known foreground apps to fast-path profiles; browsers use audio analysis."""
     process_name = process_name.casefold()
     if process_name in BROWSER_PROCESSES:
@@ -79,11 +79,11 @@ def resolve_fast_profile(process_name, detected_profile=None, music_profile="bas
         return music_profile
     if process_name in VOICE_PROCESSES:
         return speech_profile
-    if detected_profile == "fps_gaming":
+    if detected_profile in ("gaming", "fps_gaming"):
         return game_profile
-    if detected_profile == "voice_meeting":
+    if detected_profile in ("voice", "voice_meeting"):
         return speech_profile
-    if detected_profile == "bass_beast":
+    if detected_profile in ("music", "bass_beast"):
         return music_profile
     return None
 
@@ -237,10 +237,10 @@ class SoniqSenseDaemon:
         device_hint=None,
         poll_interval=DEFAULT_POLL_INTERVAL,
         debounce=DEFAULT_DEBOUNCE,
-        music_profile="bass_beast",
-        speech_profile="voice_meeting",
-        game_profile="fps_gaming",
-        cinema_profile="cinema_dialogue",
+        music_profile="music",
+        speech_profile="voice",
+        game_profile="gaming",
+        cinema_profile="movie",
         foreground_reader=read_foreground_app,
         capture=None,
         classifier=None,
@@ -517,9 +517,9 @@ def build_argument_parser():
     parser.add_argument("--device", help="Substring of playback device name; defaults to Windows' default.")
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL)
     parser.add_argument("--debounce", type=int, choices=(2, 3), default=DEFAULT_DEBOUNCE)
-    parser.add_argument("--game-profile", choices=DEFAULT_PROFILES, default="fps_gaming")
-    parser.add_argument("--music-profile", choices=DEFAULT_PROFILES, default="bass_beast")
-    parser.add_argument("--speech-profile", choices=DEFAULT_PROFILES, default="voice_meeting")
+    parser.add_argument("--game-profile", choices=DEFAULT_PROFILES, default="gaming")
+    parser.add_argument("--music-profile", choices=DEFAULT_PROFILES, default="music")
+    parser.add_argument("--speech-profile", choices=DEFAULT_PROFILES, default="voice")
     parser.add_argument("--log-file", help="Override the rotating log path.")
     parser.add_argument("--log-level", choices=("DEBUG", "INFO", "WARNING"), default="INFO")
     parser.add_argument("--quiet", action="store_true", help="Disable console logging; file logging remains enabled.")
