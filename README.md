@@ -18,11 +18,25 @@
 
 **SONIQ MAX PRO** is an open-source, system-wide audio enhancement suite and control plane for [Equalizer APO](https://sourceforge.net/projects/equalizerapo/) and direct Windows audio streams. It operates around a **custom-compiled, native 64-bit C++ Psychoacoustic DSP Engine (`SoniqMaxDSP.dll`)** that acts as the **Single Source of Truth (SSOT)** for all audio processing, executing directly inside the Windows Audio Processing Object pipeline (`audiodg.exe`) with **sub-millisecond latency** ($12.65\text{ }\mu\text{s}$ callback time).
 
-[Quickstart](#-quickstart) • [Architecture](#-system-architecture) • [DSP Engine](#-native-psychoacoustic-dsp-engine) • [Equalizer APO Setup](#-equalizer-apo-configuration) • [Building from Source](#-building-the-vst-from-source) • [Test Suite](#-automated-testing)
+[Showcase](#-application-interface--live-showcase) • [Quickstart](#-quickstart) • [Architecture](#-system-architecture) • [DSP Engine](#-native-psychoacoustic-dsp-engine) • [Equalizer APO Setup](#-equalizer-apo-configuration) • [Building from Source](#-building-the-vst-from-source) • [Test Suite](#-automated-testing)
 
 ---
 
 </div>
+
+## 📸 Application Interface & Live Showcase
+
+| **Audio Suite Dashboard** | **10-Band Graphic Equalizer** |
+| :---: | :---: |
+| [![Audio Dashboard](Proof/Screenshot%202026-11-25%20222028.png)](Proof/Screenshot%202026-11-25%20222028.png) | [![10-Band Graphic Equalizer](Proof/Screenshot%202026-11-25%20222125.png)](Proof/Screenshot%202026-11-25%20222125.png) |
+| *Streamlined profiles (`Music`, `Movie`, `Gaming`, `Voice`), stereo widener, dynamic bass exciter, dialogue clarity, and lookahead peak limiter.* | *Studio-grade 10-band parametric EQ biquad filters (32 Hz – 16 kHz) with one-click presets and real-time gain ramping.* |
+
+| **Soniq Sense AI Routing** | **Audio Pipeline & VST Engine** |
+| :---: | :---: |
+| [![Soniq Sense Auto-Adaptation](Proof/Screenshot%202026-11-25%20222150.png)](Proof/Screenshot%202026-11-25%20222150.png) | [![Settings & System Audio Pipeline](Proof/Screenshot%202026-11-25%20222213.png)](Proof/Screenshot%202026-11-25%20222213.png) |
+| *Real-time WASAPI endpoint detection (JBL Headphone sub-bass auto-pass) with debounced content classification.* | *Native 64-bit VST 2.4 driver integration (`SoniqMaxDSP.dll`), latency diagnostics, and global Win32 system hotkeys.* |
+
+---
 
 ## 📌 Executive Summary
 
@@ -59,7 +73,7 @@ Engineered with the decoupled pure C++17 **SoniqAther DSP Engine** (`vst/src/Son
 * **Fluent Dark Roast UI:** Engineered with CustomTkinter, DWM Mica/Acrylic glass styling, and live Windows registry accent-color synchronization.
 * **10-Band Interactive Graphic Equalizer:** High-precision vertical sliders (-12 to +12 dB) with preset curves (Flat, Bass Punch, Vocal Clear, Rock V-Curve, Cinema, Gaming).
 * **Dual-Engine Architecture:** Choose between **Equalizer APO Mode** (zero latency system-wide via APO) or **Direct Soniq Engine** (pure Python ctypes pipeline streaming to physical outputs).
-* **Instant Endpoint Detection:** Real-time WASAPI notifications detect when headphones or laptop speakers are connected, dynamically engaging 120 Hz anti-rattle protection for internal cones.
+* **Instant Endpoint Detection:** Real-time WASAPI notifications detect when headphones or laptop speakers are connected, dynamically engaging 65 Hz anti-rattle protection for internal cones.
 * **Global Win32 Hotkeys:** System-wide shortcuts (`Ctrl+Alt+S` master bypass, profile selectors, and night mode toggle).
 
 ---
@@ -87,7 +101,7 @@ Engineered with the decoupled pure C++17 **SoniqAther DSP Engine** (`vst/src/Son
 │   ┌───────────────────────────────▼────────────────────────────────┐   │
 │   │ 3. SoniqMaxDSP.dll (Single Source of Truth 64-Bit VST 2.4)     │   │
 │   │    ├── ① Headroom Preamp Stage (db-to-linear smooth ramping)   │   │
-│   │    ├── ② 120 Hz Subsonic Highpass (Laptop Speaker Protection)  │   │
+│   │    ├── ② 65 Hz Subsonic Highpass (Laptop Speaker Protection)   │   │
 │   │    ├── ③ 10-Band Parametric EQ (32Hz to 16kHz Peaking Biquads) │   │
 │   │    ├── ④ Harmonic Bass Exciter (2nd/3rd Harmonics + DC Blocker)│   │
 │   │    ├── ⑤ Vocal Clarity Network (2.9kHz Formant + De-Esser)     │   │
@@ -101,7 +115,7 @@ Engineered with the decoupled pure C++17 **SoniqAther DSP Engine** (`vst/src/Son
           ▼                                                   ▼
 ┌───────────────────────────────────┐               ┌───────────────────────────────────┐
 │     Laptop / Internal Speakers    │               │       Headphones / External DAC   │
-│    (120Hz Subsonic HPF Protected) │               │      (Full 20Hz Sub-Bass + 3D)    │
+│    (65Hz Subsonic HPF Protected)  │               │      (Full 20Hz Sub-Bass + 3D)    │
 └───────────────────────────────────┘               └───────────────────────────────────┘
 ```
 
