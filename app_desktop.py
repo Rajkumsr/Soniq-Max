@@ -174,6 +174,7 @@ class SoniqDesktopApp(ctk.CTk):
         self.current_device_name = "Speakers (Realtek Audio)"
         self.is_headphone = False
         self.force_full_range = False
+        self.device_effects_active = True
 
         # Initialize Background Services
         self.hotkey_service = GlobalHotkeyManager(self.on_hotkey_triggered)
@@ -220,9 +221,17 @@ class SoniqDesktopApp(ctk.CTk):
             except Exception:
                 pass
 
+    def _is_hpf_fallback_active(self):
+        return (not self.is_headphone) and (
+            getattr(self, "engine_mode", "apo") == "direct"
+            or not getattr(self, "device_effects_active", True)
+        )
+
     @property
     def effective_is_headphone(self):
-        return self.is_headphone or getattr(self, "force_full_range", False)
+        return self.is_headphone or (
+            getattr(self, "force_full_range", False) and self._is_hpf_fallback_active()
+        )
 
     # =========================================================================
     # Persistence & Profiles
@@ -418,7 +427,7 @@ class SoniqDesktopApp(ctk.CTk):
         )
         app_sub.pack(anchor="w", pady=(2, 0))
 
-        # Center: Dynamic Device Pill & Status (Clickable to override Anti-Rattle for external 4.1 / subwoofers)
+        # Center: Dynamic Device Pill & Status (Click to refresh endpoint or toggle 65 Hz subwoofer bypass when fallback is active)
         center_box = ctk.CTkFrame(h_content, fg_color="transparent")
         center_box.pack(side="left", expand=True)
 
@@ -426,12 +435,12 @@ class SoniqDesktopApp(ctk.CTk):
         self.device_pill.pack(pady=(0, 4))
 
         eff_hp = self.effective_is_headphone
-        dot_col = THEME["accent_green"] if eff_hp else THEME["accent_gold"]
+        dot_col = THEME["accent_green"] if (eff_hp or self.device_effects_active) else THEME["accent_gold"]
         self.dev_dot = ctk.CTkLabel(self.device_pill, text="●", font=ctk.CTkFont(size=11), text_color=dot_col, cursor="hand2")
         self.dev_dot.pack(side="left", padx=(10, 4), pady=3)
 
-        if self.force_full_range:
-            dev_text = "⚡ Creative / Ext (Full Bass)"
+        if self.force_full_range and self._is_hpf_fallback_active():
+            dev_text = "⚡ Ext Subwoofer (Full Bass)"
         elif self.is_headphone:
             dev_text = f"🎧 {self.current_device_name[:24]}"
         else:
@@ -447,9 +456,9 @@ class SoniqDesktopApp(ctk.CTk):
         self.dev_lbl.pack(side="left", padx=(0, 12), pady=3)
         self.lbl_device_pill = self.dev_lbl
 
-        self.device_pill.bind("<Button-1>", self.toggle_speaker_headphone_override)
-        self.dev_dot.bind("<Button-1>", self.toggle_speaker_headphone_override)
-        self.dev_lbl.bind("<Button-1>", self.toggle_speaker_headphone_override)
+        self.device_pill.bind("<Button-1>", self.on_device_pill_clicked)
+        self.dev_dot.bind("<Button-1>", self.on_device_pill_clicked)
+        self.dev_lbl.bind("<Button-1>", self.on_device_pill_clicked)
 
         self.lbl_active_app = ctk.CTkLabel(
             center_box,
@@ -459,7 +468,11 @@ class SoniqDesktopApp(ctk.CTk):
         )
         self.lbl_active_app.pack(pady=(1, 0))
 
-        FluentTooltip(self.dev_lbl, title="Audio Endpoint (Click to Toggle)", text="Click to switch between Laptop Speakers (120Hz Anti-Rattle) and External 4.1/Subwoofer (Full 20Hz Sub-Bass).")
+        FluentTooltip(
+            self.dev_lbl,
+            title="Audio Endpoint",
+            text="Active Windows playback device. Click to refresh, or toggle the 65 Hz speaker HPF bypass when fallback protection is active.",
+        )
         FluentTooltip(
             self.lbl_active_app,
             title="Soniq Sense",
@@ -591,7 +604,13 @@ class SoniqDesktopApp(ctk.CTk):
         elif "SONIQ SENSE" in sel:
             if self.tab_smart is None:
                 self.tab_smart = SmartAppTab(self.tab_smart_parent, self)
-                self.tab_smart.update_endpoint_display(self.current_device_name, self.is_headphone)
+                self.tab_smart.update_endpoint_display(
+                    self.current_device_name,
+                    self.is_headphone,
+                    self.force_full_range,
+                    self.device_effects_active,
+                    self.engine_mode,
+                )
             else:
                 self.tab_smart.animate_staggered_entrance()
         elif "SETTINGS" in sel:
@@ -611,7 +630,13 @@ class SoniqDesktopApp(ctk.CTk):
                 self.tab_eq.update_eq_sliders(p.get("eq", [0.0] * 10))
             if self.tab_smart is None:
                 self.tab_smart = SmartAppTab(self.tab_smart_parent, self)
-                self.tab_smart.update_endpoint_display(self.current_device_name, self.is_headphone)
+                self.tab_smart.update_endpoint_display(
+                    self.current_device_name,
+                    self.is_headphone,
+                    self.force_full_range,
+                    self.device_effects_active,
+                    self.engine_mode,
+                )
             if self.tab_settings is None:
                 self.tab_settings = SettingsTab(self.tab_settings_parent, self)
         except Exception:
@@ -915,8 +940,9 @@ class SoniqDesktopApp(ctk.CTk):
             }
             self.audio_bridge.update_from_profile(
                 bridge_profile,
-                is_headphone=self.effective_is_headphone,
+                is_headphone=self.is_headphone,
                 master_effects_on=self.is_enhanced,
+                force_full_range=self.force_full_range,
             )
 
         ep_type = "Headphones / Full-Range" if self.effective_is_headphone else "Laptop Speakers"
@@ -993,20 +1019,26 @@ class SoniqDesktopApp(ctk.CTk):
         """
         self.after(0, self.refresh_audio_endpoint_ui)
 
+    def on_device_pill_clicked(self, event=None):
+        if self._is_hpf_fallback_active():
+            self.toggle_speaker_headphone_override(event)
+        else:
+            self.refresh_audio_endpoint_ui()
+
     def toggle_speaker_headphone_override(self, event=None):
         self.force_full_range = not self.force_full_range
         self.save_persisted_profile()
         self.update_endpoint_pill(self.current_device_name, self.is_headphone)
         if self.force_full_range:
             self.show_toast(
-                "⚡ Full Sub-Bass Mode (20Hz)",
-                "Anti-Rattle 120Hz filter bypassed for Creative 4.1 / External Subwoofer.",
+                "⚡ Full Sub-Bass Mode (20 Hz)",
+                "Fallback 65 Hz speaker high-pass filter bypassed for external subwoofer / full-range speakers.",
                 icon="⚡",
             )
         else:
             self.show_toast(
-                "🔊 Laptop Speakers Mode",
-                "Anti-Rattle 120Hz protection re-engaged for internal laptop cones.",
+                "🔊 65 Hz Speaker Protection",
+                "Fallback 65 Hz high-pass filter re-engaged for internal laptop speakers.",
                 icon="🔊",
             )
 
@@ -1023,22 +1055,27 @@ class SoniqDesktopApp(ctk.CTk):
     def update_endpoint_pill(self, dev_name, is_hp):
         self.current_device_name = dev_name
         self.is_headphone = is_hp
-        eff_hp = self.effective_is_headphone
         is_dev_fx = self.is_device_default_effects_active()
+        self.device_effects_active = is_dev_fx
+        hpf_fallback = self._is_hpf_fallback_active()
 
         if hasattr(self, "audio_content_monitor") and self.auto_app_enabled:
             self.audio_content_monitor.reconnect()
 
-        if self.force_full_range:
-            mode_desc = "External 4.1 / Subwoofer (Full 20Hz Sub-Bass)"
-            pill_text = "⚡ Creative / Ext (Full Bass)"
-            dot_color = THEME["accent_green"]
-        elif is_hp:
-            mode_desc = "Headphones (Full 20Hz Sub-Bass)"
+        if is_hp:
+            mode_desc = "Headphones (Full 20 Hz Sub-Bass)"
             pill_text = f"🎧 {dev_name[:22]}"
             dot_color = THEME["accent_green"]
+        elif not hpf_fallback:
+            mode_desc = "Speakers (Windows Effects Active)"
+            pill_text = f"🔊 {dev_name[:24]}"
+            dot_color = THEME["accent_green"]
+        elif self.force_full_range:
+            mode_desc = "External Subwoofer (Full 20 Hz Sub-Bass)"
+            pill_text = "⚡ Ext Subwoofer (Full Bass)"
+            dot_color = THEME["accent_green"]
         else:
-            mode_desc = "Laptop Speakers (Anti-Rattle 65Hz)"
+            mode_desc = "Laptop Speakers (65 Hz Auto-Fallback)"
             pill_text = f"🔊 {dev_name[:24]}"
             dot_color = THEME["accent_gold"]
 
@@ -1050,10 +1087,15 @@ class SoniqDesktopApp(ctk.CTk):
             if hasattr(self, "dev_dot"):
                 self.dev_dot.configure(text_color=dot_color)
             if hasattr(self, "tab_smart") and self.tab_smart:
-                self.tab_smart.update_endpoint_display(dev_name, eff_hp, self.force_full_range)
+                self.tab_smart.update_endpoint_display(
+                    dev_name,
+                    is_hp,
+                    self.force_full_range,
+                    is_dev_fx,
+                    self.engine_mode,
+                )
             if hasattr(self, "lbl_status"):
                 self.lbl_status.configure(text=f"Endpoint: {dev_name} → {mode_desc} | {fx_mode_text}", text_color=THEME["accent_gold"])
-                self.lbl_status.configure(text=f"Endpoint: {dev_name} → {mode_desc}", text_color=THEME["accent_gold"])
 
         self.apply_to_system_audio()
 
@@ -1153,7 +1195,7 @@ class SoniqDesktopApp(ctk.CTk):
             if hasattr(self, "audio_bridge") and self.audio_bridge and self.audio_bridge.is_running:
                 self.audio_bridge.stop()
         self.save_persisted_profile()
-        self.apply_to_system_audio()
+        self.update_endpoint_pill(self.current_device_name, self.is_headphone)
         if hasattr(self, "tab_settings") and self.tab_settings:
             self.tab_settings.update_engine_ui()
 

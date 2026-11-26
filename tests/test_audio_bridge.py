@@ -15,6 +15,7 @@ from audio_bridge import (
     PARAM_SPATIAL,
     PARAM_LIMITER,
     PARAM_MASTER_GAIN,
+    PARAM_SPATIAL_MODE,
     PARAM_PREAMP,
     PARAM_EQ_ENABLE,
     PARAM_EQ_1KHZ,
@@ -83,6 +84,16 @@ def test_audio_bridge_profile_update():
     # Test master effects toggle off (clean bypass)
     bridge.update_from_profile(profile, is_headphone=True, master_effects_on=False)
     assert bridge.master_effects_on is False
+
+    # External subwoofer / full-range speaker override must bypass 65 Hz HPF without enabling headphone HRTF
+    bridge.update_from_profile(
+        profile, is_headphone=False, master_effects_on=True, force_full_range=True
+    )
+    assert bridge.is_headphone is False
+    assert bridge.force_full_range is True
+    if bridge.vst_engine:
+        assert pytest.approx(bridge.vst_engine.get_param(PARAM_SPEAKER_HPF), 0.01) == 0.0
+        assert pytest.approx(bridge.vst_engine.get_param(PARAM_SPATIAL_MODE), 0.01) == 0.0
     bridge.close()
 
 

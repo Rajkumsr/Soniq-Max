@@ -59,7 +59,8 @@ class SmartAppTab(ctk.CTkFrame):
 
         ep_mode_desc = (
             "• Headphones: no speaker high-pass filter is added.\n"
-            "• Speakers: a 120 Hz high-pass filter is included; actual device response varies."
+            "• Speakers: Windows Device Default Effects handle speaker protection when active; "
+            "Soniq Max engages a 65 Hz high-pass fallback only when they are off."
         )
         self.lbl_endpoint_details = ctk.CTkLabel(
             self.c_endpoint,
@@ -88,7 +89,7 @@ class SmartAppTab(ctk.CTkFrame):
 
         self.btn_toggle_override = ctk.CTkButton(
             ep_btn_row,
-            text="⚡ External 4.1 / Subwoofer (Full Bass)",
+            text="⚡ External Subwoofer (Bypass 65 Hz HPF)",
             font=ctk.CTkFont(family="Segoe UI", size=11, weight="bold"),
             fg_color=THEME["btn_secondary"],
             text_color=THEME["accent_green"],
@@ -98,11 +99,10 @@ class SmartAppTab(ctk.CTkFrame):
             height=28,
             command=self.controller.toggle_speaker_headphone_override,
         )
-        self.btn_toggle_override.pack(side="left", padx=(10, 0))
         FluentTooltip(
             self.btn_toggle_override,
-            title="External 4.1 / Subwoofer Mode",
-            text="Click to bypass the 120 Hz anti-rattle filter. Essential when connecting Creative 4.1, 2.1, or subwoofers via 3.5mm jack.",
+            title="External Subwoofer / Full-Range Mode",
+            text="Click to bypass Soniq Max's 65 Hz fallback high-pass filter when using an external subwoofer or full-range speakers.",
         )
 
         # Card 2: Soniq Sense hybrid app and playback-content analysis
@@ -186,22 +186,19 @@ class SmartAppTab(ctk.CTkFrame):
         self._profile_choice_values = []
         self._build_profile_assignment_controls()
 
-    def update_endpoint_display(self, dev_name, is_hp, force_full_range=False):
-        """Refreshes endpoint labels."""
+    def update_endpoint_display(
+        self,
+        dev_name,
+        is_hp,
+        force_full_range=False,
+        device_effects_active=True,
+        engine_mode="apo",
+    ):
+        """Refreshes endpoint labels and shows the 65 Hz HPF bypass only when needed."""
         self.lbl_endpoint_device.configure(text=f"Device: {dev_name}")
-        if force_full_range:
-            hp_tag = "EXTERNAL 4.1 / SUBWOOFER (FULL 20Hz BASS)"
-            hp_color = THEME["accent_green"]
-            desc = (
-                "• Mode: External 4.1 / Subwoofer Override.\n"
-                "• Anti-Rattle 120 Hz filter is BYPASSED. Full 20 Hz deep sub-bass is unlocked for your Creative subwoofer!"
-            )
-            if hasattr(self, "btn_toggle_override"):
-                self.btn_toggle_override.configure(
-                    text="🔊 Re-enable Laptop Anti-Rattle (120Hz)",
-                    text_color=THEME["accent_bronze"],
-                )
-        elif is_hp:
+        hpf_fallback_active = (not is_hp) and (engine_mode == "direct" or not device_effects_active)
+
+        if is_hp:
             hp_tag = "HEADPHONES"
             hp_color = THEME["accent_green"]
             desc = (
@@ -209,23 +206,44 @@ class SmartAppTab(ctk.CTkFrame):
                 "• No speaker high-pass filter is added (full 20 Hz sub-bass active)."
             )
             if hasattr(self, "btn_toggle_override"):
-                self.btn_toggle_override.configure(
-                    text="⚡ External 4.1 / Subwoofer (Full Bass)",
-                    text_color=THEME["accent_green"],
-                )
-        else:
-            hp_tag = "LAPTOP SPEAKERS (ANTI-RATTLE 120Hz)"
-            hp_color = THEME["accent_bronze"]
+                self.btn_toggle_override.pack_forget()
+        elif not hpf_fallback_active:
+            hp_tag = "SPEAKERS (WINDOWS EFFECTS ACTIVE)"
+            hp_color = THEME["accent_green"]
             desc = (
-                "• Mode: Internal Laptop Speakers.\n"
-                "• 120 Hz high-pass anti-rattle filter is engaged to prevent laptop chassis rattling.\n"
-                "• When using Creative 4.1 or external speakers, click 'External 4.1 / Subwoofer' below to bypass this cut!"
+                "• Mode: Speakers with Windows Device Default Effects active.\n"
+                "• Speaker protection is handled by Windows / OEM audio drivers — Soniq Max's 65 Hz high-pass "
+                "filter is bypassed automatically to prevent double processing."
+            )
+            if hasattr(self, "btn_toggle_override"):
+                self.btn_toggle_override.pack_forget()
+        elif force_full_range:
+            hp_tag = "EXTERNAL SUBWOOFER (FULL 20Hz BASS)"
+            hp_color = THEME["accent_green"]
+            desc = (
+                "• Mode: External Speakers / Subwoofer Override.\n"
+                "• Fallback 65 Hz high-pass filter is BYPASSED for full 20 Hz sub-bass."
             )
             if hasattr(self, "btn_toggle_override"):
                 self.btn_toggle_override.configure(
-                    text="⚡ External 4.1 / Subwoofer (Full Bass)",
+                    text="🔊 Re-enable 65 Hz Speaker Protection",
+                    text_color=THEME["accent_bronze"],
+                )
+                self.btn_toggle_override.pack(side="left", padx=(10, 0))
+        else:
+            hp_tag = "SPEAKERS (65Hz AUTO-FALLBACK)"
+            hp_color = THEME["accent_bronze"]
+            desc = (
+                "• Mode: Speakers (Windows Effects OFF / Direct Engine).\n"
+                "• Fallback 65 Hz high-pass filter is engaged to protect internal laptop speakers.\n"
+                "• Using an external subwoofer or full-range speakers? Click 'External Subwoofer' below to bypass this cut."
+            )
+            if hasattr(self, "btn_toggle_override"):
+                self.btn_toggle_override.configure(
+                    text="⚡ External Subwoofer (Bypass 65 Hz HPF)",
                     text_color=THEME["accent_green"],
                 )
+                self.btn_toggle_override.pack(side="left", padx=(10, 0))
 
         self.lbl_endpoint_badge.configure(text=f"● {hp_tag}", text_color=hp_color)
         self.lbl_endpoint_details.configure(text=desc)

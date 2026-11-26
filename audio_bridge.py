@@ -234,6 +234,7 @@ class AudioBridge:
         self.param_volume = 1.0
         self.param_limiter = 1.0
         self.is_headphone = False
+        self.force_full_range = False
 
         # Live telemetry (thread-safe scalar values using pure math)
         self.peak_in_l = 0.0
@@ -374,11 +375,19 @@ class AudioBridge:
         if restart:
             self.start()
 
-    def update_from_profile(self, profile: Dict, is_headphone: bool = False, master_effects_on: bool = True):
+    def update_from_profile(
+        self,
+        profile: Dict,
+        is_headphone: bool = False,
+        master_effects_on: bool = True,
+        force_full_range: bool = False,
+    ):
         """Dispatches profile parameters directly into the live VST engine in RAM."""
         with self._lock:
             self.master_effects_on = master_effects_on
             self.is_headphone = is_headphone
+            self.force_full_range = force_full_range
+            bypass_speaker_hpf = bool(is_headphone or force_full_range)
 
             # Bass & clarity: 0.0 - 1.0 (normalize if passed as 0-100 percentage)
             raw_bass = float(profile.get("bass", 35.0))
@@ -427,7 +436,7 @@ class AudioBridge:
                 self.vst_engine.set_param(PARAM_BASS_ENABLE, 1.0 if self.param_bass > 0.005 else 0.0)
                 self.vst_engine.set_param(PARAM_CLARITY_ENABLE, 1.0 if self.param_clarity > 0.005 else 0.0)
                 self.vst_engine.set_param(PARAM_SPATIAL_ENABLE, 1.0 if self.param_spatial > 0.005 else 0.0)
-                self.vst_engine.set_param(PARAM_SPEAKER_HPF, 0.0 if is_headphone else 1.0)
+                self.vst_engine.set_param(PARAM_SPEAKER_HPF, 0.0 if bypass_speaker_hpf else 1.0)
 
                 for b in range(10):
                     self.vst_engine.set_param(PARAM_EQ_32HZ + b, float(raw_eq[b]))
